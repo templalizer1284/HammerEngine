@@ -1,0 +1,13 @@
+Requirements:
+1. C compiler - clang 3.1, gcc 4.8, msvc 16.9, those are minimum versions because of ASan.
+2. Raylib
+3. Basic POSIX support
+
+Those are the requirements.
+
+Windows NT:
+I compiled hammer engine using w64devkit i find it easy to
+use. Compile it unix style.
+
+Unix:
+Just run bsdmake/make and that's it basically.

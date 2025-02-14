@@ -1,41 +1,44 @@
-#ifndef H_HAMMER
-#define H_HAMMER
+#ifndef HAMMER_H
+#define HAMMER_H
 
-/* There will be compatibility between minor versions always. */
-#define VERSION_MAJOR 0 
-#define VERSION_MINOR 1
-
-/* --------------
- * Core C libraries
- * -------------- */
-
+// Core C
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdarg.h>
 
-/* ----------------
- * POSIX librarires
- * ---------------- */
-
+// POSIX
 #include <unistd.h>
 #include <libgen.h>
 
-/* ----------------
- * Third-party code
- * ---------------- */
-
-/* Portable multimedia library */
+// Raylib
 #include <raylib.h>
 #include <raymath.h>
 
-/* -----------------
- * Main loop include 
- * ----------------- */
-#include "processor.h"
+// i will not write this crap everytime
+typedef uint8_t i8;
+typedef uint16_t i16;
 
+// datadecl
+typedef struct h_Window h_Window;
+typedef struct h_Model h_Model;
+typedef struct h_Entity h_Entity;
+
+// fundecl
+extern i8 h_HammerRun(void);
+static i8 h_WindowInit(void);
+static i8 h_Loop(void);
+
+// datadef
+struct h_Window {
+	i16 width;
+	i16 height;
+	char *title;
+};
+
+// globals
 #define HAMMERCFG "hammercfg"
+static h_Window window = { 0 };
+static Camera camera = { 0 };
 
 #endif

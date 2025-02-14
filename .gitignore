@@ -4,3 +4,7 @@
 media/
 hammercfg
 test/
+.DS_Store/
+hammer
+impl.c
+base/

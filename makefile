@@ -10,7 +10,7 @@ FLAGS = -Wall -Wextra -std=c23 -pedantic
 DFLAGS = -O0 -g -fsanitize=address
 RFLAGS = -O2
 
-SRC = impl.c hammer.c
+SRC = impl.c
 
 debug:
 	$(CC) $(INC) $(LIBS_PATH) $(LINK) $(FLAGS) $(DFLAGS) $(SRC) -o $(EXE)

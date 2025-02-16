@@ -1,10 +1,11 @@
+TODO
 *~
 *dSYM/
 *o
 media/
 hammercfg
 test/
-.DS_Store/
+.DS_Store
 hammer
 impl.c
 base/

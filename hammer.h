@@ -18,24 +18,25 @@
 #include <raymath.h>
 
 // i will not write this crap everytime
-typedef uint8_t i8;
-typedef uint16_t i16;
+typedef uint8_t u8;
+typedef uint16_t u16;
+#define HE_DECL static inline
 
 // datadecl
 typedef struct h_Window h_Window;
 typedef struct h_Model h_Model;
 typedef struct h_Entity h_Entity;
 typedef struct h_Config h_Config;
-
+nn
 // fundecl
-i8 h_HammerRun(void);
-i8 h_WindowInit(void);
-i8 h_Loop(void);
+HE_DECL u8 h_HammerRun(void);
+HE_DECL u8 h_WindowInit(void);
+HE_DECL u8 h_Loop(void);
 
 // datadef
 struct h_Window {
-	i16 width;
-	i16 height;
+	u16 width;
+	u16 height;
 	char *title;
 };
 
@@ -67,11 +68,11 @@ struct h_Config {
 #define SEP "/"
 
 #ifdef _WIN32
-#define SEP "\"
+#define SEP "\\"
 #endif
 
 #ifdef _WIN64
-#define SEP "\"
+#define SEP "\\"
 #endif
 
 #define HAMMERCFG "hammercfg"
@@ -79,9 +80,9 @@ static h_Window window = { 0 };
 static Camera camera = { 0 };
 static h_Model models[65536];
 
-static i16 models_count = 0;
+static u16 models_count = 0;
 
-i8 h_HammerRun(void) {
+u8 h_HammerRun(void) {
 
 	printf("Hammer Engine Running, BattleCruiser operational.\n");
 
@@ -98,12 +99,12 @@ i8 h_HammerRun(void) {
 	return 0;
 }
 
-i8 h_WindowInit(void) {
+u8 h_WindowInit(void) {
 	if(access(HAMMERCFG, F_OK) == 0) {
 		FILE *fp = fopen(HAMMERCFG, "r");
-		char *tmp = malloc(20);
+		char tmp[64];
 
-		#define ff fscanf(fp, "%s", tmp)
+		#define ff fscanf(fp, "%63s", tmp)
 		while(ff != EOF) {
 			if(strcmp(tmp, "width") == 0) {
 				ff;
@@ -122,7 +123,6 @@ i8 h_WindowInit(void) {
 		}
 
 		fclose(fp);
-		free(tmp);
 	}
 
 	else {
@@ -146,7 +146,7 @@ i8 h_WindowInit(void) {
 	return 0;
 }
 
-i8 h_Loop(void) {
+u8 h_Loop(void) {
 
 	while(!WindowShouldClose()) {
 		BeginDrawing();

@@ -1,5 +1,3 @@
-CC = clang-mp-19
-
 EXE = hammer
 INC = -I/opt/local/include
 LIBS_PATH = -L/opt/local/lib

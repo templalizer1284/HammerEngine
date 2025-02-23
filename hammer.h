@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 
 // POSIX
 #include <unistd.h>
@@ -57,7 +58,7 @@ typedef struct h_EngineState h_EngineState;
 HE_DECL u8 h_HammerRun(void);
 HE_DECL u8 h_WindowInit(void);
 HE_DECL u8 h_Loop(void);
-HE_DECL u8 h_EngineParseBase(const char *);
+HE_DECL u8 h_EngineParseBase(void);
 
 // ddef
 struct h_Window {
@@ -125,7 +126,7 @@ u8 h_HammerRun(void) {
 		return 1;
 	}
 
-	if(h_EngineParseBase(engine.config.base)) {
+	if(h_EngineParseBase()) {
 		perror("Engine Base folder parsing failed. Aborting.");
 		return 1;
 	}
@@ -220,12 +221,12 @@ u8 h_Loop(void) {
 	return 0;
 }
 
-HE_DECL u8 h_EngineParseBase(const char *path) {
+HE_DECL u8 h_EngineParseBase(void) {
 
 	FILE *fp = NULL;
 
 	// checking for base folder correctness
-	if(access(path, F_OK) == 0) {
+	if(access(engine.config.base, F_OK) == 0) {
 		(void)snprintf(engine.config.root, sizeof(engine.config.root),
 		"%s%s%s", engine.config.base, SEP, CFG_ROOT);
 

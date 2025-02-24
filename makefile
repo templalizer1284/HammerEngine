@@ -4,9 +4,9 @@ LIBS_PATH = -L/opt/local/lib
 
 LINK = -lraylib
 
-FLAGS = -Wall -Wextra -std=c23 -pedantic
+FLAGS = -Wall -Wunused -Wextra -std=c23 -pedantic
 DFLAGS = -O0 -g -fsanitize=address,undefined
-RFLAGS = -O2 -DNDEBUG
+RFLAGS = -O2
 
 SRC = impl.c
 

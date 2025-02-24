@@ -8,11 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <assert.h>
+#include <stdbool.h>
 
 // POSIX
 #include <unistd.h>
 #include <libgen.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 // Raylib
 #include <raylib.h>
@@ -25,8 +27,17 @@
 #define CFG_RESOURCES "cfg.resources"
 #define BASE_LEVELS "levels"
 #define BASE_MEDIA "media"
+#define BASE_SAVE "save"
 #define TITLE "Hammer Engine"
+
+// dev-only, to be removed once save/load is implemented
+#define LOAD_FILE "aca.sav"
+
+// i don't think anyone would want more res than this
 #define MAX_MODELS 1024
+#define MAX_LEVELS 32
+
+#define h_Stringify(x) #x
 
 #define SEP "/"
 
@@ -52,13 +63,30 @@ typedef struct h_Model h_Model;
 typedef struct h_Entity h_Entity;
 typedef struct h_Level h_Level;
 typedef struct h_Config h_Config;
+typedef struct h_HammerMenu h_HammerMenu;
+
 typedef struct h_EngineState h_EngineState;
+
+enum h_MENU_SWITCH {
+	NEW_GAME,
+	LOAD_GAME,
+	OPTIONS,
+	QUIT
+};
 
 // fdecl
 HE_DECL u8 h_HammerRun(void);
 HE_DECL u8 h_WindowInit(void);
 HE_DECL u8 h_Loop(void);
 HE_DECL u8 h_EngineParseBase(void);
+HE_DECL u8 h_EngineParseRoot(void);
+HE_DECL u8 h_EngineParseLevel(void);
+
+HE_DECL u8 h_HammerIntro(void); // TODO
+HE_DECL u8 h_HammerMenuRun(void);
+
+HE_DECL u8 h_EngineLoadGame(const char *); // TODO
+HE_DECL u8 h_EngineSaveGame(const char *); // TODO
 
 // ddef
 struct h_Window {
@@ -91,12 +119,18 @@ struct h_Config {
 	char root[32];
 	char level[32];
 	char resources[32];
+	char save[32];
 };
 
 struct h_Level {
-	h_Config config;
 	h_Model models[MAX_MODELS];
 	u16 model_count;
+	char path[256];
+};
+
+struct h_HammerMenu {
+	char background_path[64];
+	Texture2D background_texture;
 };
 
 struct h_EngineState {
@@ -104,8 +138,12 @@ struct h_EngineState {
 	Camera camera;
 	const u8 fps;
 	h_Config config;
-	h_Level levels[32];
+	h_Level levels[MAX_LEVELS];
 	h_Level *current_level;
+	u8 levels_count;
+	char *load_file;
+	h_HammerMenu menu;
+	bool debug;
 };
 
 // globals
@@ -113,8 +151,12 @@ static h_EngineState engine = { .window.title = TITLE,
 				.camera = {0},
 				.fps = 30,
 				.config = {0},
-				.levels = {0},
-				.current_level = NULL };
+				.levels = { {0} },
+				.current_level = NULL,
+				.levels_count = 0,
+				.debug = false,
+				.menu = { {0}, {0} },
+				.load_file = "" };
 
 // fdef
 u8 h_HammerRun(void) {
@@ -130,12 +172,22 @@ u8 h_HammerRun(void) {
 		perror("Engine Base folder parsing failed. Aborting.");
 		return 1;
 	}
-	
-	if(h_Loop()) {
-		perror("Main loop error. Aborting.");
+
+	if(h_EngineParseRoot()) {
+		LOG("Error occured while parsing root cfg.\n");
 		return 1;
 	}
 
+	if(h_HammerMenuRun()) {
+		LOG("Menu drawing error.\n");
+		return 1;
+	}
+
+	/*if(h_Loop()) {
+		LOG("Main loop error.\n");
+		return 1;
+	}*/
+		
 	return 0;
 }
 
@@ -206,13 +258,15 @@ u8 h_WindowInit(void) {
 }
 
 u8 h_Loop(void) {
-
 	while(!WindowShouldClose()) {
 		BeginDrawing();
+			ClearBackground(DARKBLUE);
 			BeginMode3D(engine.camera);
 
-		ClearBackground(DARKBLUE);
-		DrawFPS(10,10);
+			if(engine.debug) {
+				DrawFPS(10,10);
+				DrawGrid(100,100);
+			}
 			
 			EndMode3D();
 		EndDrawing();
@@ -221,25 +275,66 @@ u8 h_Loop(void) {
 	return 0;
 }
 
-HE_DECL u8 h_EngineParseBase(void) {
+u8 h_EngineParseBase(void) {
+
+	// first count the number of levels
+	struct dirent *entry;
+	struct stat statbuf;
+	u8 folder_count = 0;
 
 	FILE *fp = NULL;
 
 	// checking for base folder correctness
 	if(access(engine.config.base, F_OK) == 0) {
+
+		// check i posix's opendir can access base levels folder
+		char levels_folder[256] = { 0 };
+		(void)snprintf(levels_folder, sizeof(levels_folder),
+			"%s%s%s", engine.config.base, SEP, BASE_LEVELS);
+		
+		DIR *dir = opendir(levels_folder);
+		if(dir == NULL) {
+			LOG("Unable to open base folder.\n");
+			return 1;
+		}
+
+		// if okay, attempts to read all folders, this is for the sake of keeping
+		// how many levels are there.
+		else {
+			while( (entry = readdir(dir)) != NULL ) {
+
+				// skip . and ..
+				if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+
+				char full_path[256];
+				snprintf(full_path, sizeof(full_path),
+				"%s%s%s%s%s", engine.config.base, SEP, BASE_LEVELS, SEP, entry->d_name);
+
+				// check if file is actually a folder
+				if( stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode) ) {
+
+					// while accumulating needed info, we can extract path for levels.
+					(void)snprintf(engine.levels[folder_count].path,
+					sizeof(engine.levels[folder_count].path),
+					"%s", full_path);
+					
+					folder_count++;
+				}
+			}
+
+			closedir(dir);
+		}
+
+		engine.levels_count = folder_count;
+	
 		(void)snprintf(engine.config.root, sizeof(engine.config.root),
 		"%s%s%s", engine.config.base, SEP, CFG_ROOT);
 
-		// Always check for first level cfg as first level is starting point
-		// Load/Save logic is done elsewhere.
-		//(void)snprintf(engine.config.level, sizeof(engine.config.level),
-		//"%s%s%s%s%s%s%s", tmp, SEP, BASE_LEVELS, SEP, "1", SEP, CFG_LEVEL);
-				
-		//(void)snprintf(engine.config.resources, sizeof(engine.config.resources),
-		//"%s%s%s", tmp, SEP, CFG_RESOURCES);
+		(void)snprintf(engine.config.resources, sizeof(engine.config.resources),
+		"%s%s%s", engine.config.base, SEP, CFG_RESOURCES);
 
 		if(access(engine.config.root, F_OK) != 0) {
-			perror("Base root config not found.");
+			LOG("Base root config not found.\n");
 			return 1;
 		}
 	}
@@ -249,16 +344,116 @@ HE_DECL u8 h_EngineParseBase(void) {
 		return 1;
 	}
 
-	if( (fp = fopen(engine.config.root, "r")) != NULL) {
-		// do nothing for now, control definitions.
+	fclose(fp);
+	return 0;
+}
+
+u8 h_EngineParseRoot(void) {
+
+	FILE *fp = fopen(engine.config.root, "r");
+
+	char tmp[64];
+	#define ff fscanf(fp, "%63s", tmp)
+
+	while(ff == 1) {
+		if(strcmp(tmp, "DEBUG") == 0) {
+			engine.debug = true;
+			continue;
+		}
+
+		else if(strcmp(tmp, "MENU") == 0) {
+			ff;
+			if(strcmp(tmp, "BACKGROUND") == 0) {
+				ff;
+
+				char full_path[256];
+				(void)snprintf(full_path, sizeof(full_path),
+				"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
+				
+				if(access(full_path, F_OK) == 0) {
+					(void)snprintf(engine.menu.background_path,
+					sizeof(engine.menu.background_path),
+					"%s", full_path);
+				}
+
+				else {
+					perror("Cannot open menu background image.");
+					return 1;
+				}
+			}
+
+			continue;
+		}
+
+		else {
+			LOG("Syntax error in cfg.root, instruction '%s' not recognized.\n", tmp);
+			return 1;
+		}
+	}
+	
+	fclose(fp);
+	return 0;
+}
+
+u8 h_EngineParseLevel(void) {
+	return 0;
+}
+
+u8 h_EngineLoadGame(const char *file) {
+
+	FILE *fp = NULL;
+
+	if(access(file, F_OK) == 0) {
+
+		fp = fopen(file, "r");
+		if(fp == NULL) {
+			perror("Failed to open file.");
+			return 1;
+		}
+
+		else {
+			char tmp[64];
+			while(fscanf(fp, "%63s", tmp) == 1) {
+				if(strcmp(tmp, "LEVEL") == 0) {
+					fscanf(fp, "%63s", tmp);
+					if(atoi(tmp) == 0) {
+						LOG("Loading saved file failed.\n");
+						return 1;
+					}
+
+					else {
+						engine.current_level = &engine.levels[atoi(tmp)];
+					}
+				}
+
+				else {
+					perror("Syntax error while reading save file.");
+					return 1;
+				}
+			}
+		}
 	}
 
 	else {
-		perror("Base folder failed to open. fopen error.");
+		LOG("Cannot not open file '%s'\n", file);
 		return 1;
 	}
 
 	fclose(fp);
+	return 0;
+}
+
+u8 h_HammerMenuRun(void) {
+
+	// loading menu resources
+	engine.menu.background_texture = LoadTexture(engine.menu.background_path);
+
+	while(!WindowShouldClose()) {
+		BeginDrawing();
+			DrawTexture(engine.menu.background_texture, 0,0, WHITE);
+		EndDrawing();
+	}
+
 	return 0;
 }
 

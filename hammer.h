@@ -130,7 +130,9 @@ struct h_Level {
 
 struct h_HammerMenu {
 	char background_path[64];
+	char button_path[64], button_select_path[64];
 	Texture2D background_texture;
+	Texture2D button_texture, button_select_texture;
 };
 
 struct h_EngineState {
@@ -155,7 +157,7 @@ static h_EngineState engine = { .window.title = TITLE,
 				.current_level = NULL,
 				.levels_count = 0,
 				.debug = false,
-				.menu = { {0}, {0} },
+				.menu = { 0 },
 				.load_file = "" };
 
 // fdef
@@ -383,6 +385,47 @@ u8 h_EngineParseRoot(void) {
 			}
 
 			continue;
+		}
+
+		if(strcmp(tmp, "BUTTON") == 0) {
+			ff;
+			if(strcmp(tmp, "TEXTURE") == 0) {
+				ff;
+				if(strcmp(tmp, "SELECT") == 0) {
+					ff;
+					if(access(tmp, F_OK) == 0) {
+						(void)snprintf(engine.menu.button_select_path,
+						sizeof(engine.menu.button_select_path),
+						"%s%s%s%s%s",
+						engine.config.base, SEP,
+						BASE_MEDIA, SEP, tmp);
+					}
+
+					else {
+						LOG("Button texture not found.\n");
+						return 1;
+					}
+				}
+
+				else {
+					ff;
+					if(access(tmp, F_OK) == 0) {
+						
+					}
+
+					else {
+						LOG("Button texture not found.\n");
+						return 1;
+					}
+				}
+
+				continue;
+			}
+
+			else {
+				LOG("Syntax error in cfg.root regarding buttons.\n");
+				return 1;
+			}
 		}
 
 		else {

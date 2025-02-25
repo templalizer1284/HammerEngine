@@ -67,13 +67,6 @@ typedef struct h_HammerMenu h_HammerMenu;
 
 typedef struct h_EngineState h_EngineState;
 
-enum h_MENU_SWITCH {
-	NEW_GAME,
-	LOAD_GAME,
-	OPTIONS,
-	QUIT
-};
-
 // fdecl
 HE_DECL u8 h_HammerRun(void);
 HE_DECL u8 h_WindowInit(void);
@@ -129,10 +122,14 @@ struct h_Level {
 };
 
 struct h_HammerMenu {
-	char background_path[64];
-	char button_path[64], button_select_path[64];
+	Font button_font, text_font;
+	char button_newgame[20];
+	char button_loadgame[20];
+	char button_options[20];
+	char button_quit[20];
+	char selector[10];
 	Texture2D background_texture;
-	Texture2D button_texture, button_select_texture;
+	u8 menu_switch;
 };
 
 struct h_EngineState {
@@ -266,8 +263,8 @@ u8 h_Loop(void) {
 			BeginMode3D(engine.camera);
 
 			if(engine.debug) {
-				DrawFPS(10,10);
-				DrawGrid(100,100);
+				DrawFPS(10.0f,10.0f);
+				DrawGrid(100.0f, 100.0f);
 			}
 			
 			EndMode3D();
@@ -373,9 +370,7 @@ u8 h_EngineParseRoot(void) {
 				"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
 				
 				if(access(full_path, F_OK) == 0) {
-					(void)snprintf(engine.menu.background_path,
-					sizeof(engine.menu.background_path),
-					"%s", full_path);
+					engine.menu.background_texture = LoadTexture(full_path);
 				}
 
 				else {
@@ -387,45 +382,27 @@ u8 h_EngineParseRoot(void) {
 			continue;
 		}
 
-		if(strcmp(tmp, "BUTTON") == 0) {
+		if(strcmp(tmp, "FONT") == 0) {
 			ff;
-			if(strcmp(tmp, "TEXTURE") == 0) {
-				ff;
-				if(strcmp(tmp, "SELECT") == 0) {
-					ff;
-					if(access(tmp, F_OK) == 0) {
-						(void)snprintf(engine.menu.button_select_path,
-						sizeof(engine.menu.button_select_path),
-						"%s%s%s%s%s",
-						engine.config.base, SEP,
-						BASE_MEDIA, SEP, tmp);
-					}
-
-					else {
-						LOG("Button texture not found.\n");
-						return 1;
-					}
-				}
-
-				else {
-					ff;
-					if(access(tmp, F_OK) == 0) {
-						
-					}
-
-					else {
-						LOG("Button texture not found.\n");
-						return 1;
-					}
-				}
-
-				continue;
+			char path[255];
+			(void)snprintf(path, sizeof(path),
+			"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
+			
+			if(access(path, F_OK) == 0) {
+				engine.menu.button_font = LoadFontEx(path, 32, 0, 250);
+				engine.menu.text_font = LoadFontEx(path, 12, 0, 20);
 			}
 
 			else {
-				LOG("Syntax error in cfg.root regarding buttons.\n");
+				LOG("Could not load font file %s.", tmp);
 				return 1;
 			}
+		}
+
+		else if(strcmp(tmp, "SELECTOR") == 0) {
+			ff;
+			(void)snprintf(engine.menu.selector, sizeof(engine.menu.selector),
+			"%1s", tmp);
 		}
 
 		else {
@@ -488,14 +465,53 @@ u8 h_EngineLoadGame(const char *file) {
 
 u8 h_HammerMenuRun(void) {
 
-	// loading menu resources
-	engine.menu.background_texture = LoadTexture(engine.menu.background_path);
+	char buttons[][20] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
+	u8 num_buttons = 4;
+	char text[20];
 
 	while(!WindowShouldClose()) {
 		BeginDrawing();
-			DrawTexture(engine.menu.background_texture, 0,0, WHITE);
+
+			if(engine.debug) DrawFPS(10.0f, 10.0f);
+
+			// drawing background image
+			DrawTexture(engine.menu.background_texture, 0, 0, DARKBLUE);
+
+			// drawing buttons, newgame,loadgame,options and quit
+			for(auto i = 0; i < num_buttons; i++) {
+
+				if(i == engine.menu.menu_switch) {
+					(void)memset(text, 0, strlen(text));
+					(void)snprintf(text, sizeof(text),
+					"%s %s", buttons[i], engine.menu.selector);
+				}
+
+				else {
+					(void)memset(text, 0, strlen(text));
+					(void)snprintf(text, sizeof(text), "%s", buttons[i]);
+				}
+				
+				DrawTextEx(engine.menu.button_font, text,
+				(Vector2){(float)engine.window.width / 4,
+				((float)engine.window.height / 2) + (float)i * 50.0f},
+				(float)engine.menu.button_font.baseSize, 2, MAROON);
+			}
+
+			// check for keyboard input, to change selector
+			if(IsKeyDown(KEY_DOWN)) {
+				engine.menu.menu_switch++;
+			}
+			
+			if(IsKeyDown(KEY_UP)) {
+				engine.menu.menu_switch--;
+			}
+
+			WaitTime(0.05f);
+			
 		EndDrawing();
 	}
+
+	UnloadFont(engine.menu.button_font);
 
 	return 0;
 }

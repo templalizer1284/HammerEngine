@@ -297,28 +297,26 @@ u8 h_HammerLevelRun(const char *level) {
 		return 1;
 	}
 
-	Model model = LoadModel("wotan/media/hero.glb");
-
 	while(!WindowShouldClose()) {
 
-		UpdateCamera(&engine.camera, CAMERA_THIRD_PERSON);
-	
 		BeginDrawing();
 			ClearBackground(DARKBLUE);
 			BeginMode3D(engine.camera);
 
 			if(engine.debug) {
-				DrawFPS(10.0f,10.0f);
 				DrawGrid(10.0f, 1.0f);
 			}
 
 			// drawing models, hero, map and entities.
-			DrawModel(model, (Vector3){0,0,0}, 1.0f, WHITE);
-
-			// entities
-			
+			h_EngineModelDraw(&engine.current_level->hero);
+			h_EngineModelDraw(&engine.current_level->map);
 			
 			EndMode3D();
+
+			if(engine.debug) {
+				DrawFPS(10.0f,10.0f);
+			}
+			
 		EndDrawing();
 	}
 
@@ -677,15 +675,30 @@ u8 h_HammerMenuRun(void) {
 
 h_Model h_EngineModelLoad(const char *path) {
 
-	h_Model model;
-	model.model = LoadModel(path);
-	model.animation = LoadModelAnimations(path, &model.animCount);
+	h_Model model = {
+		.model = LoadModel(path),
+		.animation = LoadModelAnimations(path, &model.animCount),
+		.position = (Vector3) {0.0f, 0.0f, 0.0f},
+		.tint = WHITE,
+		.scale = 1.0f,
+		.render = true
+	};
+
+	// generating bounding box, TODO
 
 	return model;
 }
 
 u8 h_EngineModelDraw(h_Model *model) {
-	DrawModel(model->model, model->position, 1.0f, WHITE);
+
+	if(model->render) {
+		DrawModel(model->model, model->position, model->scale, model->tint);
+	}
+
+	else {
+		return 0;
+	}
+	
 	return 0;
 }
 

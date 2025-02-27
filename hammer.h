@@ -25,6 +25,7 @@
 #define CFG_LEVEL "cfg.level"
 #define CFG_ROOT "cfg.root"
 #define CFG_RESOURCES "cfg.resources"
+#define CFG_LOGIC "cfg.logic"
 #define BASE_LEVELS "levels"
 #define BASE_MEDIA "media"
 #define BASE_SAVE "save"
@@ -34,7 +35,7 @@
 #define LOAD_FILE "aca.sav"
 
 // i don't think anyone would want more res than this
-#define MAX_MODELS 1024
+#define MAX_MODELS 255
 #define MAX_LEVELS 32
 
 #define h_Stringify(x) #x
@@ -67,16 +68,26 @@ typedef struct h_HammerMenu h_HammerMenu;
 
 typedef struct h_EngineState h_EngineState;
 
+enum BUTTONS {
+	NEW_GAME,
+	LOAD_GAME,
+	OPTIONS,
+	QUIT
+};
+
 // fdecl
 HE_DECL u8 h_HammerRun(void);
 HE_DECL u8 h_WindowInit(void);
-HE_DECL u8 h_Loop(void);
 HE_DECL u8 h_EngineParseBase(void);
 HE_DECL u8 h_EngineParseRoot(void);
-HE_DECL u8 h_EngineParseLevel(void);
+HE_DECL u8 h_EngineParseLevel(const char *);
 
 HE_DECL u8 h_HammerIntro(void); // TODO
 HE_DECL u8 h_HammerMenuRun(void);
+HE_DECL u8 h_HammerLevelRun(const char *);
+
+HE_DECL h_Model h_EngineModelLoad(const char *);
+HE_DECL u8 h_EngineModelDraw(h_Model *);
 
 HE_DECL u8 h_EngineLoadGame(const char *); // TODO
 HE_DECL u8 h_EngineSaveGame(const char *); // TODO
@@ -116,9 +127,16 @@ struct h_Config {
 };
 
 struct h_Level {
-	h_Model models[MAX_MODELS];
-	u16 model_count;
-	char path[256];
+
+	h_Model hero,map;
+
+	h_Model entities[MAX_MODELS];
+	h_Model npcs[MAX_MODELS];
+	
+	u16 entities_count, npcs_count;
+
+	// logic info
+	
 };
 
 struct h_HammerMenu {
@@ -137,9 +155,8 @@ struct h_EngineState {
 	Camera camera;
 	const u8 fps;
 	h_Config config;
-	h_Level levels[MAX_LEVELS];
+	char starting_level[255];
 	h_Level *current_level;
-	u8 levels_count;
 	char *load_file;
 	h_HammerMenu menu;
 	bool debug;
@@ -150,9 +167,8 @@ static h_EngineState engine = { .window.title = TITLE,
 				.camera = {0},
 				.fps = 30,
 				.config = {0},
-				.levels = { {0} },
+				.starting_level = "",
 				.current_level = NULL,
-				.levels_count = 0,
 				.debug = false,
 				.menu = { 0 },
 				.load_file = "" };
@@ -177,20 +193,38 @@ u8 h_HammerRun(void) {
 		return 1;
 	}
 
-	if(h_HammerMenuRun()) {
-		LOG("Menu drawing error.\n");
-		return 1;
-	}
+	switch(h_HammerMenuRun()) {
 
-	/*if(h_Loop()) {
-		LOG("Main loop error.\n");
-		return 1;
-	}*/
+		case NEW_GAME:
+			if(h_HammerLevelRun(engine.starting_level)) {
+				LOG("Level running error.\n");
+				return 1;
+			};
+		break;
+
+		case LOAD_GAME:
+			LOG("Load game not yet implemented.\n");
+		break;
+
+		case OPTIONS:
+			LOG("Options not yet implemented.\n");
+		break;
+
+		case QUIT:
+			return 0;
+		break;
+	
+		default:
+			LOG("Menu drawing error.\n");
+			return 1;
+		break;
+	}
 		
 	return 0;
 }
 
 u8 h_WindowInit(void) {
+
 	if(access(HAMMERCFG, F_OK) == 0) {
 		FILE *fp = fopen(HAMMERCFG, "r");
 		char tmp[64];
@@ -256,16 +290,33 @@ u8 h_WindowInit(void) {
 	return 0;
 }
 
-u8 h_Loop(void) {
+u8 h_HammerLevelRun(const char *level) {
+
+	if(h_EngineParseLevel(level)) {
+		LOG("Level parsing error.\n");
+		return 1;
+	}
+
+	Model model = LoadModel("wotan/media/hero.glb");
+
 	while(!WindowShouldClose()) {
+
+		UpdateCamera(&engine.camera, CAMERA_THIRD_PERSON);
+	
 		BeginDrawing();
 			ClearBackground(DARKBLUE);
 			BeginMode3D(engine.camera);
 
 			if(engine.debug) {
 				DrawFPS(10.0f,10.0f);
-				DrawGrid(100.0f, 100.0f);
+				DrawGrid(10.0f, 1.0f);
 			}
+
+			// drawing models, hero, map and entities.
+			DrawModel(model, (Vector3){0,0,0}, 1.0f, WHITE);
+
+			// entities
+			
 			
 			EndMode3D();
 		EndDrawing();
@@ -279,7 +330,6 @@ u8 h_EngineParseBase(void) {
 	// first count the number of levels
 	struct dirent *entry;
 	struct stat statbuf;
-	u8 folder_count = 0;
 
 	FILE *fp = NULL;
 
@@ -297,8 +347,7 @@ u8 h_EngineParseBase(void) {
 			return 1;
 		}
 
-		// if okay, attempts to read all folders, this is for the sake of keeping
-		// how many levels are there.
+		// if okay, attempts to read all folders
 		else {
 			while( (entry = readdir(dir)) != NULL ) {
 
@@ -310,27 +359,24 @@ u8 h_EngineParseBase(void) {
 				"%s%s%s%s%s", engine.config.base, SEP, BASE_LEVELS, SEP, entry->d_name);
 
 				// check if file is actually a folder
-				if( stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode) ) {
-
-					// while accumulating needed info, we can extract path for levels.
-					(void)snprintf(engine.levels[folder_count].path,
-					sizeof(engine.levels[folder_count].path),
-					"%s", full_path);
-					
-					folder_count++;
+				if( stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode) );
+				else {
+					LOG("File %s is not a folder, put only levels inside levels folder.\n", full_path);
+					return 1;
 				}
 			}
 
 			closedir(dir);
 		}
 
-		engine.levels_count = folder_count;
-	
 		(void)snprintf(engine.config.root, sizeof(engine.config.root),
 		"%s%s%s", engine.config.base, SEP, CFG_ROOT);
 
 		(void)snprintf(engine.config.resources, sizeof(engine.config.resources),
-		"%s%s%s", engine.config.base, SEP, CFG_RESOURCES);
+		"%s%s%s", engine.config.base, SEP, BASE_MEDIA);
+
+		(void)snprintf(engine.config.level, sizeof(engine.config.level),
+		"%s%s%s", engine.config.base, SEP, BASE_LEVELS);
 
 		if(access(engine.config.root, F_OK) != 0) {
 			LOG("Base root config not found.\n");
@@ -360,23 +406,20 @@ u8 h_EngineParseRoot(void) {
 			continue;
 		}
 
-		else if(strcmp(tmp, "MENU") == 0) {
+		else if(strcmp(tmp, "BACKGROUND") == 0) {
 			ff;
-			if(strcmp(tmp, "BACKGROUND") == 0) {
-				ff;
 
-				char full_path[256];
-				(void)snprintf(full_path, sizeof(full_path),
-				"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
+			char full_path[256];
+			(void)snprintf(full_path, sizeof(full_path),
+			"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
 				
-				if(access(full_path, F_OK) == 0) {
-					engine.menu.background_texture = LoadTexture(full_path);
-				}
+			if(access(full_path, F_OK) == 0) {
+				engine.menu.background_texture = LoadTexture(full_path);
+			}
 
-				else {
-					perror("Cannot open menu background image.");
-					return 1;
-				}
+			else {
+				perror("Cannot open menu background image.");
+				return 1;
 			}
 
 			continue;
@@ -397,12 +440,37 @@ u8 h_EngineParseRoot(void) {
 				LOG("Could not load font file %s.", tmp);
 				return 1;
 			}
+
+			continue;
+
 		}
 
 		else if(strcmp(tmp, "SELECTOR") == 0) {
 			ff;
 			(void)snprintf(engine.menu.selector, sizeof(engine.menu.selector),
 			"%1s", tmp);
+
+			continue;
+		}
+
+		if(strcmp(tmp, "NEW_GAME_START") == 0) {
+			ff;
+
+			char path[255];
+			(void)snprintf(path, sizeof(path),
+			"%s%s%s", engine.config.level, SEP, tmp);
+			
+			if(access(path, F_OK) == 0) {
+				(void)snprintf(engine.starting_level, sizeof(engine.starting_level),
+				"%s", path);
+			}
+
+			else {
+				LOG("Level %s doesn't exist.\n", tmp);
+				return 1;
+			}
+
+			continue;
 		}
 
 		else {
@@ -415,7 +483,94 @@ u8 h_EngineParseRoot(void) {
 	return 0;
 }
 
-u8 h_EngineParseLevel(void) {
+u8 h_EngineParseLevel(const char *path) {
+
+	char resources[255], logic[255];
+
+	(void)snprintf(resources, sizeof(resources),
+	"%s%s%s", path, SEP, CFG_RESOURCES);
+
+	(void)snprintf(logic, sizeof(logic),
+	"%s%s%s", path, SEP, CFG_LOGIC);
+
+	FILE *fp = NULL; char tmp[64];
+	#define ff fscanf(fp, "%63s", tmp)
+
+	static h_Level level;
+
+	if(access(resources, F_OK) == 0 && access(logic, F_OK) == 0) {
+		if( (fp = fopen(resources, "r")) == NULL ) {
+			LOG("Failed to open resources config for the level.\n");
+			return 1;
+		}
+
+		else {
+			while(ff == 1) {
+				if(strcmp(tmp, "HERO") == 0) {
+					ff;
+					char p[255];
+					(void)snprintf(p, sizeof(p),
+					"%s%s%s", engine.config.resources, SEP, tmp);
+					LOG("%s", p);
+					
+					if(access(p, F_OK) == 0) {
+						// load hero
+						level.hero = h_EngineModelLoad(p);
+					}
+
+					else {
+						LOG("Hero model %s cannot be loaded.\n", tmp);
+						return 1;
+					}
+
+					continue;
+				}
+
+				else if(strcmp(tmp, "MAP") == 0) {
+					ff;
+
+					char p[255];
+					(void)snprintf(p, sizeof(p),
+					"%s%s%s", engine.config.resources, SEP, tmp);
+					
+					if(access(p, F_OK) == 0) {
+						// load map
+						level.map = h_EngineModelLoad(p);
+					}
+
+					else {
+						LOG("Map model %s cannot be loaded.\n", tmp);
+						return 1;
+					}
+
+					continue;
+				}
+
+				else {
+					LOG("Syntax error in resources config, %s unrecognized.\n", tmp);
+					return 1;
+				}
+			}
+		}
+
+		if( (fp = fopen(logic, "r")) == NULL ) {
+			LOG("Failed to open logic config for the level.\n");
+			return 1;
+		}
+
+		else {
+			while(ff == 1) {
+				
+			}
+		}
+	}
+
+	else {
+		LOG("Cannot open config file for resources or logic.\n");
+		return 1;
+	}
+
+	engine.current_level = &level;
 	return 0;
 }
 
@@ -442,7 +597,7 @@ u8 h_EngineLoadGame(const char *file) {
 					}
 
 					else {
-						engine.current_level = &engine.levels[atoi(tmp)];
+						//engine.current_level = &engine.levels[atoi(tmp)];
 					}
 				}
 
@@ -465,8 +620,10 @@ u8 h_EngineLoadGame(const char *file) {
 
 u8 h_HammerMenuRun(void) {
 
-	char buttons[][20] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
-	u8 num_buttons = 4;
+	#define AR_SIZE 20
+	char buttons[][AR_SIZE] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
+	auto num_buttons = (u8)sizeof(buttons) / AR_SIZE;
+	
 	char text[20];
 
 	while(!WindowShouldClose()) {
@@ -498,21 +655,37 @@ u8 h_HammerMenuRun(void) {
 			}
 
 			// check for keyboard input, to change selector
-			if(IsKeyDown(KEY_DOWN)) {
+			if(IsKeyPressed(KEY_DOWN)) {
 				engine.menu.menu_switch++;
 			}
 			
-			if(IsKeyDown(KEY_UP)) {
+			else if(IsKeyPressed(KEY_UP)) {
 				engine.menu.menu_switch--;
 			}
 
-			WaitTime(0.05f);
+			if(IsKeyDown(KEY_ENTER)) {
+				break;
+			}
 			
 		EndDrawing();
 	}
 
 	UnloadFont(engine.menu.button_font);
 
+	return engine.menu.menu_switch;
+}
+
+h_Model h_EngineModelLoad(const char *path) {
+
+	h_Model model;
+	model.model = LoadModel(path);
+	model.animation = LoadModelAnimations(path, &model.animCount);
+
+	return model;
+}
+
+u8 h_EngineModelDraw(h_Model *model) {
+	DrawModel(model->model, model->position, 1.0f, WHITE);
 	return 0;
 }
 

@@ -4,7 +4,7 @@ LIBS_PATH = -L/opt/local/lib
 
 LINK = -lraylib
 
-FLAGS = -Wall -Wunused -Wextra -std=c23 -pedantic
+FLAGS = -Wall -Wunused -Wextra -std=c99 -pedantic
 DFLAGS = -O0 -g -fsanitize=address,undefined
 RFLAGS = -O2
 

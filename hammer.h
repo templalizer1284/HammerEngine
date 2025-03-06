@@ -39,6 +39,10 @@
 #define MAX_LEVELS 32
 
 #define h_Stringify(x) #x
+#define h_Vec3Mod(dst,x,y,z) \
+	dst.x = x; \
+	dst.y = y; \
+	dst.z = y
 
 #define SEP "/"
 
@@ -48,7 +52,7 @@
 #endif
 
 #ifdef DEBUG
-	#define LOG(fmt, ...) printf(fmt __VA_OPT__(,) __VA_ARGS__)
+	#define LOG printf
 #else
 	#define LOG(...) ((void)0)
 #endif
@@ -75,22 +79,28 @@ enum BUTTONS {
 	QUIT
 };
 
-// fdecl
-HE_DECL u8 h_HammerRun(void);
-HE_DECL u8 h_WindowInit(void);
-HE_DECL u8 h_EngineParseBase(void);
-HE_DECL u8 h_EngineParseRoot(void);
-HE_DECL u8 h_EngineParseLevel(const char *);
+enum ENTITY_TYPE {
+	HERO,
+	MAP,
+	STATIC
+};
 
-HE_DECL u8 h_HammerIntro(void); // TODO
-HE_DECL u8 h_HammerMenuRun(void);
-HE_DECL u8 h_HammerLevelRun(const char *);
+// fdecl
+HE_DECL u8 	h_HammerRun(void);
+HE_DECL u8 	h_WindowInit(void);
+HE_DECL u8 	h_EngineParseBase(void);
+HE_DECL u8 	h_EngineParseRoot(void);
+HE_DECL u8 	h_EngineParseLevel(const char *);
+
+HE_DECL u8 	h_HammerIntro(void); // TODO
+HE_DECL u8 	h_HammerMenuRun(void);
+HE_DECL u8 	h_HammerLevelRun(const char *);
 
 HE_DECL h_Model h_EngineModelLoad(const char *);
-HE_DECL u8 h_EngineModelDraw(h_Model *);
+HE_DECL	u8 	h_EngineModelDraw(h_Model *);
 
-HE_DECL u8 h_EngineLoadGame(const char *); // TODO
-HE_DECL u8 h_EngineSaveGame(const char *); // TODO
+HE_DECL	u8 	h_EngineLoadGame(const char *); // TODO
+HE_DECL u8 	h_EngineSaveGame(const char *); // TODO
 
 // ddef
 struct h_Window {
@@ -114,6 +124,9 @@ struct h_Model {
 	float angle;
 	bool render;
 
+	char name[255];
+	u8 type;
+
 	float scale;
 	Color tint;
 };
@@ -131,12 +144,12 @@ struct h_Level {
 	h_Model hero,map;
 
 	h_Model entities[MAX_MODELS];
-	h_Model npcs[MAX_MODELS];
 	
-	u16 entities_count, npcs_count;
+	u16 entities_count;
+
+	char name[255];
 
 	// logic info
-	
 };
 
 struct h_HammerMenu {
@@ -174,7 +187,8 @@ static h_EngineState engine = { .window.title = TITLE,
 				.load_file = "" };
 
 // fdef
-u8 h_HammerRun(void) {
+u8
+h_HammerRun(void) {
 
 	LOG("Hammer Engine Running, BattleCruiser operational.\n");
 
@@ -223,7 +237,8 @@ u8 h_HammerRun(void) {
 	return 0;
 }
 
-u8 h_WindowInit(void) {
+u8
+h_WindowInit(void) {
 
 	if(access(HAMMERCFG, F_OK) == 0) {
 		FILE *fp = fopen(HAMMERCFG, "r");
@@ -290,7 +305,8 @@ u8 h_WindowInit(void) {
 	return 0;
 }
 
-u8 h_HammerLevelRun(const char *level) {
+u8
+h_HammerLevelRun(const char *level) {
 
 	if(h_EngineParseLevel(level)) {
 		LOG("Level parsing error.\n");
@@ -310,6 +326,11 @@ u8 h_HammerLevelRun(const char *level) {
 			// drawing models, hero, map and entities.
 			h_EngineModelDraw(&engine.current_level->hero);
 			h_EngineModelDraw(&engine.current_level->map);
+
+			// entities, TODO, compare entity types render accordingly
+			for(int i = 0; i < engine.current_level->entities_count; i++) {
+				h_EngineModelDraw(&engine.current_level->entities[i]);
+			}
 			
 			EndMode3D();
 
@@ -320,10 +341,14 @@ u8 h_HammerLevelRun(const char *level) {
 		EndDrawing();
 	}
 
+	UnloadModel(engine.current_level->hero.model);
+	UnloadModel(engine.current_level->map.model);
+
 	return 0;
 }
 
-u8 h_EngineParseBase(void) {
+u8
+h_EngineParseBase(void) {
 
 	// first count the number of levels
 	struct dirent *entry;
@@ -391,7 +416,8 @@ u8 h_EngineParseBase(void) {
 	return 0;
 }
 
-u8 h_EngineParseRoot(void) {
+u8
+h_EngineParseRoot(void) {
 
 	FILE *fp = fopen(engine.config.root, "r");
 
@@ -481,7 +507,8 @@ u8 h_EngineParseRoot(void) {
 	return 0;
 }
 
-u8 h_EngineParseLevel(const char *path) {
+u8
+h_EngineParseLevel(const char *path) {
 
 	char resources[255], logic[255];
 
@@ -496,6 +523,12 @@ u8 h_EngineParseLevel(const char *path) {
 
 	static h_Level level;
 
+	(void)snprintf(level.name, sizeof(level.name),
+	"%s", path);
+
+	engine.current_level = &level;
+
+	// parsing resources
 	if(access(resources, F_OK) == 0 && access(logic, F_OK) == 0) {
 		if( (fp = fopen(resources, "r")) == NULL ) {
 			LOG("Failed to open resources config for the level.\n");
@@ -509,11 +542,15 @@ u8 h_EngineParseLevel(const char *path) {
 					char p[255];
 					(void)snprintf(p, sizeof(p),
 					"%s%s%s", engine.config.resources, SEP, tmp);
-					LOG("%s", p);
 					
 					if(access(p, F_OK) == 0) {
 						// load hero
 						level.hero = h_EngineModelLoad(p);
+						
+						(void)snprintf(level.hero.name, sizeof(level.hero.name),
+						"%s", tmp);
+
+						level.hero.type = HERO;
 					}
 
 					else {
@@ -534,10 +571,53 @@ u8 h_EngineParseLevel(const char *path) {
 					if(access(p, F_OK) == 0) {
 						// load map
 						level.map = h_EngineModelLoad(p);
+
+						(void)snprintf(level.map.name, sizeof(level.map.name),
+						"%s", tmp);
+
+						level.map.type = MAP;
 					}
 
 					else {
 						LOG("Map model %s cannot be loaded.\n", tmp);
+						return 1;
+					}
+
+					continue;
+				}
+
+				if(strcmp(tmp, "ENTITY") == 0) {
+					ff;
+					
+					if(strcmp(tmp, "STATIC") == 0) {
+						ff;
+
+						char full_path[255];
+						(void)snprintf(full_path, sizeof(full_path),
+						"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
+						
+						if(access(full_path, F_OK) == 0) {
+							FILE *fpp = fopen(full_path, "r");
+
+							if(fpp == NULL) {
+								LOG("Cannot open %s entity.\n", tmp);
+								return 1;
+							}
+
+							else {
+								engine.current_level->entities[engine.current_level->entities_count] = h_EngineModelLoad(full_path);
+								engine.current_level->entities_count++;
+							}
+						}
+
+						else {
+							LOG("Cannot access %s entity.\n", tmp);
+							return 1;
+						}
+					}
+
+					else {
+						LOG("Unknown entity type '%s' in level config.\n", tmp);
 						return 1;
 					}
 
@@ -568,11 +648,49 @@ u8 h_EngineParseLevel(const char *path) {
 		return 1;
 	}
 
-	engine.current_level = &level;
+	// parsing logic
+	if( (fp = fopen(logic, "r")) == NULL) {
+		LOG("Cannot open logic for current level.\n");
+		return 1;
+	}
+
+	else {
+		while(ff == 1) {
+			if(strcmp(tmp, "POSITION") == 0) {
+
+				// get model name
+				ff;
+
+				bool exists = false;
+				int counter = 0;
+				// check if model exists in array
+				for(int i = 0; i < engine.current_level->entities_count; i++) {
+					if(strcmp(tmp, engine.current_level->entities[i].name) == 0) {
+						exists = true;
+						counter = i;
+					}
+				}
+
+				if(exists == true) {
+					float x,y,z;
+					fscanf(fp, "%f %f %f", &x, &y, &z);
+					h_Vec3Mod(engine.current_level->entities[counter].position, x,y,z);
+				}
+
+				else {
+					LOG("Syntax error in level logic, model doesn't exist.\n");
+					return 1;
+				}
+			}
+		}
+	}
+
+	fclose(fp);
 	return 0;
 }
 
-u8 h_EngineLoadGame(const char *file) {
+u8
+h_EngineLoadGame(const char *file) {
 
 	FILE *fp = NULL;
 
@@ -616,11 +734,12 @@ u8 h_EngineLoadGame(const char *file) {
 	return 0;
 }
 
-u8 h_HammerMenuRun(void) {
+u8
+h_HammerMenuRun(void) {
 
 	#define AR_SIZE 20
 	char buttons[][AR_SIZE] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
-	auto num_buttons = (u8)sizeof(buttons) / AR_SIZE;
+	int num_buttons = (u8)sizeof(buttons) / AR_SIZE;
 	
 	char text[20];
 
@@ -633,7 +752,7 @@ u8 h_HammerMenuRun(void) {
 			DrawTexture(engine.menu.background_texture, 0, 0, DARKBLUE);
 
 			// drawing buttons, newgame,loadgame,options and quit
-			for(auto i = 0; i < num_buttons; i++) {
+			for(int i = 0; i < num_buttons; i++) {
 
 				if(i == engine.menu.menu_switch) {
 					(void)memset(text, 0, strlen(text));
@@ -673,7 +792,8 @@ u8 h_HammerMenuRun(void) {
 	return engine.menu.menu_switch;
 }
 
-h_Model h_EngineModelLoad(const char *path) {
+h_Model
+h_EngineModelLoad(const char *path) {
 
 	h_Model model = {
 		.model = LoadModel(path),
@@ -681,15 +801,20 @@ h_Model h_EngineModelLoad(const char *path) {
 		.position = (Vector3) {0.0f, 0.0f, 0.0f},
 		.tint = WHITE,
 		.scale = 1.0f,
-		.render = true
+		.render = true,
 	};
+
+	// getting only model name from path
+	(void)snprintf(model.name, sizeof(model.name),
+	"%s", basename((char *)path));
 
 	// generating bounding box, TODO
 
 	return model;
 }
 
-u8 h_EngineModelDraw(h_Model *model) {
+u8
+h_EngineModelDraw(h_Model *model) {
 
 	if(model->render) {
 		DrawModel(model->model, model->position, model->scale, model->tint);

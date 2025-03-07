@@ -86,21 +86,23 @@ enum ENTITY_TYPE {
 };
 
 // fdecl
-HE_DECL u8 	h_HammerRun(void);
-HE_DECL u8 	h_WindowInit(void);
-HE_DECL u8 	h_EngineParseBase(void);
-HE_DECL u8 	h_EngineParseRoot(void);
-HE_DECL u8 	h_EngineParseLevel(const char *);
+HE_DECL u8 		h_HammerRun(void);
+HE_DECL u8 		h_WindowInit(void);
+HE_DECL u8 		h_EngineParseBase(void);
+HE_DECL u8 		h_EngineParseRoot(void);
+HE_DECL u8 		h_EngineParseLevel(const char *);
 
-HE_DECL u8 	h_HammerIntro(void); // TODO
-HE_DECL u8 	h_HammerMenuRun(void);
-HE_DECL u8 	h_HammerLevelRun(const char *);
+HE_DECL u8 		h_HammerIntro(void); // TODO
+HE_DECL u8 		h_HammerMenuRun(void);
+HE_DECL u8 		h_HammerLevelRun(const char *);
 
-HE_DECL h_Model h_EngineModelLoad(const char *);
-HE_DECL	u8 	h_EngineModelDraw(h_Model *);
+HE_DECL h_Model 	h_EngineModelLoad(const char *);
+HE_DECL	u8 		h_EngineModelDraw(h_Model *);
 
-HE_DECL	u8 	h_EngineLoadGame(const char *); // TODO
-HE_DECL u8 	h_EngineSaveGame(const char *); // TODO
+HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
+HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
+
+HE_DECL u8		h_EngineUnload(void);
 
 // ddef
 struct h_Window {
@@ -233,7 +235,7 @@ h_HammerRun(void) {
 			return 1;
 		break;
 	}
-		
+	
 	return 0;
 }
 
@@ -749,7 +751,7 @@ h_HammerMenuRun(void) {
 			if(engine.debug) DrawFPS(10.0f, 10.0f);
 
 			// drawing background image
-			DrawTexture(engine.menu.background_texture, 0, 0, DARKBLUE);
+			DrawTexture(engine.menu.background_texture, 0, 0, WHITE);
 
 			// drawing buttons, newgame,loadgame,options and quit
 			for(int i = 0; i < num_buttons; i++) {
@@ -800,8 +802,6 @@ h_HammerMenuRun(void) {
 		EndDrawing();
 	}
 
-	UnloadFont(engine.menu.button_font);
-
 	return engine.menu.menu_switch;
 }
 
@@ -837,6 +837,14 @@ h_EngineModelDraw(h_Model *model) {
 		return 0;
 	}
 	
+	return 0;
+}
+
+u8
+h_EngineUnload(void) {
+
+	UnloadFont(engine.menu.button_font);
+
 	return 0;
 }
 

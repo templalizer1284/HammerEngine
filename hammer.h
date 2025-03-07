@@ -773,11 +773,24 @@ h_HammerMenuRun(void) {
 
 			// check for keyboard input, to change selector
 			if(IsKeyPressed(KEY_DOWN)) {
-				engine.menu.menu_switch++;
+				if(engine.menu.menu_switch == (num_buttons - 1)) {
+					engine.menu.menu_switch = 0;
+				}
+
+				else {
+					engine.menu.menu_switch++;
+				}
 			}
 			
 			else if(IsKeyPressed(KEY_UP)) {
-				engine.menu.menu_switch--;
+				if(engine.menu.menu_switch == 0) {
+					engine.menu.menu_switch = num_buttons - 1;
+				}
+
+				else {
+					engine.menu.menu_switch--;
+				}
+
 			}
 
 			if(IsKeyDown(KEY_ENTER)) {

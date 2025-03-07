@@ -1,0 +1,12 @@
+Logic configuration docs.
+
+cfg.level is a file that exists at top level in level folder.
+each level must contain one.
+
+Keywords definition:
+
+POSITION arg float float float
+- basically changes the position of model, arg is name of the model(filename) in media folder.
+model must be loaded in game of course before using this keyword or error will occur.
+
+EX: POSITION hero.glb 1.0 1.0 1.0

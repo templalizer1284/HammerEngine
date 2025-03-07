@@ -1,0 +1,27 @@
+Resources configuration docs.
+
+cfg.resources is a file that exists at top level in level folder.
+each level must contain one.
+
+Keywords definition:
+
+HERO arg
+- defines hero model for the level, arg is file name in media folder.
+EX: HERO hero.glb
+
+MAP arg
+- defines map model for the level, arg is file name in media folder.
+EX: MAP map.glb
+
+ENTITY TYPE arg
+- entity is basically everything else regarding models in levels.
+
+TYPE:
+
+STATIC
+- model that just exists and does nothing on its own, usefull when you want something to be added
+additionally in map but don't want to mess with map itself.
+
+arg is filename in media folder.
+
+EX: ENTITY STATIC cube.glb

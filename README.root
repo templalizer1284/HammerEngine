@@ -1,0 +1,27 @@
+Root configuration docs.
+
+cfg.root exists in base game folder at top always.
+
+Keywords definitions:
+
+DEBUG 
+- debugging purpose, draws FPS, 3D grid and engine is more verbose.
+- it takes no arguments
+
+BACKGROUND arg 
+- defines background image for main menu, arg is file name in media folder.
+EX: BACKGROUND forest.png
+
+FONT arg 
+- defines font for main menu and game. arg is file name in media folder.
+EX: FONT romulus.ttf
+
+SELECTOR arg 
+- its basically a selector for menu buttons, since main menu in hammer is just text.
+- arg should be characters without quotes.
+EX: SELECTOR <
+
+NEW_GAME_START arg
+- selects particular level that should be started when "New Game" button is pressed.
+- arg is folder in levels folder
+EX: NEW_GAME_START first_level

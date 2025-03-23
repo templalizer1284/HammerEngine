@@ -85,6 +85,22 @@ enum ENTITY_TYPE {
 	STATIC
 };
 
+enum ANIMATION_POSITIONS {
+	IDLE,
+	RUN,
+	STOP,
+	TURN,
+	ATTACK,
+	HIT,
+	COLLISION,
+	DEATH,
+	MISC_ONE, // miscellaneous extra animations
+	MISC_TWO,
+	MISC_THREE,
+	MISC_FOUR,
+	MISC_FIVE
+};
+
 // fdecl
 HE_DECL u8 		h_HammerRun(void);
 HE_DECL u8 		h_WindowInit(void);
@@ -114,9 +130,10 @@ struct h_Window {
 struct h_Model {
 	Model model;
 
-	ModelAnimation *restrict animation;
+	ModelAnimation *animations;
 	int animCount;
-	int currentAnim;
+	int currentAnimation;
+	int currentFrame;
 	bool animate;
 
 	BoundingBox box, transformedBox;
@@ -809,17 +826,34 @@ h_Model
 h_EngineModelLoad(const char *path) {
 
 	h_Model model = {
-		.model = LoadModel(path),
-		.animation = LoadModelAnimations(path, &model.animCount),
-		.position = (Vector3) {0.0f, 0.0f, 0.0f},
+		.animCount = 0,
+		.currentFrame = 0,
+		.currentAnimation = IDLE,
+		.animate = false,
+		.position = (Vector3) { 0.0f, 0.0f, 0.0f },
 		.tint = WHITE,
 		.scale = 1.0f,
 		.render = true,
 	};
 
+	model.model = LoadModel(path);
+	model.animations = LoadModelAnimations(path, &model.animCount);
+
+	// check if model actually contains animations, animate
+	if(model.animCount > 0) {
+		model.animate = true;
+	}
+
+	// if it doesn't contain then ditch animations
+	else {
+		UnloadModelAnimations(model.animations, model.animCount);
+	}
+
 	// getting only model name from path
 	(void)snprintf(model.name, sizeof(model.name),
 	"%s", basename((char *)path));
+
+	LOG("Num of animations for model %s is %d.\n", model.name, model.animCount);
 
 	// generating bounding box, TODO
 
@@ -830,6 +864,19 @@ u8
 h_EngineModelDraw(h_Model *model) {
 
 	if(model->render) {
+
+		if(model->animate) {
+			model->currentFrame++;
+
+			if(model->currentFrame == model->animations[model->currentAnimation].frameCount) {
+				model->currentFrame = 1;
+			}
+			
+			UpdateModelAnimation(model->model,
+				model->animations[model->currentAnimation],
+				model->currentFrame);
+		}
+
 		DrawModel(model->model, model->position, model->scale, model->tint);
 	}
 

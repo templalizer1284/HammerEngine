@@ -217,6 +217,8 @@ struct h_EngineControl {
 
 	// trackers
 	bool light;
+	float velocity;
+	float run_factor;
 };
 
 // globals
@@ -230,7 +232,6 @@ static h_EngineState engine = { .window.title = TITLE,
 				.menu = { 0 },
 				.load_file = "" };
 
-// these are default keys, you can change them in logic config. (TODO)
 static h_EngineControl controls = { .forward = KEY_W,
 				    .backward = KEY_S,
 				    .strafe_left = KEY_A,
@@ -242,7 +243,9 @@ static h_EngineControl controls = { .forward = KEY_W,
 
 				    .pause = KEY_P,
 
-				    .light = false };
+				    .light = false,
+				    .velocity = 0.07f,
+				    .run_factor = 0.10f };
 
 // fdef
 u8
@@ -391,12 +394,25 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			// input check
-			if(IsKeyDown(controls.forward)) {
-				engine.current_level->hero.position.z += 0.07f * cos(DEG2RAD * engine.current_level->hero.angle);
+
+			// check is run
+			float speed;
+			
+			if(IsKeyDown(controls.toggle_run)) {
+				speed = controls.velocity + controls.run_factor;
+			}
+
+			else {
+				speed = controls.velocity;
+			}
+			
+			if(IsKeyDown(controls.forward)) { //xx
+				engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
+				engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
 			}
 
 			else if(IsKeyDown(controls.backward)) {
-				engine.current_level->hero.position.z -= 0.07f;
+				engine.current_level->hero.position.z -= speed;
 			}
 
 			if(IsKeyDown(controls.turn_left)) {

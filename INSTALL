@@ -10,4 +10,17 @@ I compiled hammer engine using w64devkit i find it easy to
 use. Compile it unix style.
 
 Unix:
-Just run bsdmake/make and that's it basically.
+Before compiling, we have to know what compiler you want to use and where are libs.
+
+Examples:
+// my machine
+CC=clang-mp-19 INC=/opt/local/include LIBS_PATH=/opt/local/lib bsdmake
+
+// your machine(probably)
+CC=gcc INC=/usr/include LIBS_PATH=/usr/lib make
+
+To enable optimizations and release the engine just pass release flag:
+CC=gcc INC=/usr/inc LIBS_PATH=/usr/lib make release
+
+To make development easier just use alias:
+alias compile="CC=gcc INC=... LIBS_PATH=..."

@@ -1,6 +1,4 @@
 EXE = hammer
-INC = -I/opt/local/include
-LIBS_PATH = -L/opt/local/lib
 
 LINK = -lraylib
 
@@ -11,7 +9,7 @@ RFLAGS = -O2
 SRC = impl.c
 
 debug:
-	$(CC) $(INC) $(LIBS_PATH) $(LINK) $(FLAGS) $(DFLAGS) $(SRC) -o $(EXE)
+	$(CC) -I$(INC) -L$(LIBS_PATH) $(LINK) $(FLAGS) $(DFLAGS) $(SRC) -o $(EXE)
 
 release:
-	$(CC) $(INC) $(LIBS_PATH) $(LINK) $(FLAGS) $(RFLAGS) $(SRC) -o $(EXE)
+	$(CC) -I$(INC) -L$(LIBS_PATH) $(LINK) $(FLAGS) $(RFLAGS) $(SRC) -o $(EXE)

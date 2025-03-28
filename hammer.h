@@ -198,6 +198,8 @@ struct h_EngineState {
 	char *load_file;
 	h_HammerMenu menu;
 	bool debug;
+
+	void *cvars[];
 };
 
 struct h_EngineControl {
@@ -412,7 +414,7 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			else if(IsKeyDown(controls.backward)) {
-				engine.current_level->hero.position.z -= speed;
+				engine.current_level->hero.position.z -= speed; //xx
 			}
 
 			if(IsKeyDown(controls.turn_left)) {

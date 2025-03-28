@@ -85,16 +85,20 @@ enum ENTITY_TYPE {
 	STATIC
 };
 
+// for use within this engine every model must have index of its animations like this
+// starting from 0 for IDLE animation
+// they are in this order because not all entites attack or die, what is common for all
+// entities is that they all have idle and run animations, optionally turning animations.
 enum ANIMATION_POSITIONS {
-	IDLE,
+	IDLE, // = 0
 	RUN,
-	STOP,
 	TURN,
-	ATTACK,
-	HIT,
-	COLLISION,
 	DEATH,
-	MISC_ONE, // miscellaneous extra animations
+	HIT, // when got hit by an entity
+	ATTACK,
+	COLLISION,
+	STOP, // anim used for stopping after walk/run
+	MISC_ONE, // miscellaneous extra animations, defined in logic
 	MISC_TWO,
 	MISC_THREE,
 	MISC_FOUR,
@@ -114,6 +118,9 @@ HE_DECL u8 		h_HammerLevelRun(const char *);
 
 HE_DECL h_Model 	h_EngineModelLoad(const char *);
 HE_DECL	u8 		h_EngineModelDraw(h_Model *);
+
+HE_DECL BoundingBox	CombineBoundingBoxes(BoundingBox, BoundingBox);
+HE_DECL void		UpdateTransformedBoundingBox(h_Model *);
 
 HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
 HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
@@ -161,11 +168,8 @@ struct h_Config {
 struct h_Level {
 
 	h_Model hero,map;
-
 	h_Model entities[MAX_MODELS];
-	
 	u16 entities_count;
-
 	char name[255];
 
 	// logic info
@@ -349,6 +353,12 @@ h_HammerLevelRun(const char *level) {
 			// entities, TODO, compare entity types render accordingly
 			for(int i = 0; i < engine.current_level->entities_count; i++) {
 				h_EngineModelDraw(&engine.current_level->entities[i]);
+			}
+
+			// input check
+			if(IsKeyPressed(KEY_A)) {
+				engine.current_level->entities[1].currentAnimation++;
+				engine.current_level->entities[1].currentFrame = 1;
 			}
 			
 			EndMode3D();
@@ -701,6 +711,11 @@ h_EngineParseLevel(const char *path) {
 					return 1;
 				}
 			}
+
+			else {
+				LOG("Syntax error, %s is unknown keyword in logic.\n", tmp);
+				return 1;
+			}
 		}
 	}
 
@@ -855,7 +870,13 @@ h_EngineModelLoad(const char *path) {
 
 	LOG("Num of animations for model %s is %d.\n", model.name, model.animCount);
 
-	// generating bounding box, TODO
+	// generating bounding box
+	model.box = GetMeshBoundingBox(model.model.meshes[0]);
+
+	for(int i = 1; i < model.model.meshCount; i++) {
+		BoundingBox currentBox = GetMeshBoundingBox(model.model.meshes[i]);
+		model.box = CombineBoundingBoxes(model.box, currentBox);
+	}
 
 	return model;
 }
@@ -877,7 +898,13 @@ h_EngineModelDraw(h_Model *model) {
 				model->currentFrame);
 		}
 
-		DrawModel(model->model, model->position, model->scale, model->tint);
+		UpdateTransformedBoundingBox(model);
+
+		DrawModel(model->model, model->position, model->scal, model->tint);
+
+		if(engine.debug) {
+			DrawBoundingBox(model->transformedBox, GREEN);
+		}
 	}
 
 	else {
@@ -885,6 +912,26 @@ h_EngineModelDraw(h_Model *model) {
 	}
 	
 	return 0;
+}
+
+BoundingBox
+CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
+	BoundingBox combined;
+
+	combined.min.x = fmin(box1.min.x, box2.min.x);
+	combined.min.y = fmin(box1.min.y, box2.min.y);
+	combined.min.z = fmin(box1.min.z, box2.min.z);
+	combined.max.x = fmax(box1.max.x, box2.max.x);
+	combined.max.y = fmax(box1.max.y, box2.max.y);
+	combined.max.z = fmax(box1.max.z, box2.max.z);
+
+	return combined;
+}
+
+void
+UpdateTransformedBoundingBox(h_Model *model) {
+	model->transformedBox.min = Vector3Add(model->box.min, model->position);
+	model->transformedBox.max = Vector3Add(model->box.max, model->position);
 }
 
 u8

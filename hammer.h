@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 
 // POSIX
 #include <unistd.h>
@@ -69,6 +70,7 @@ typedef struct h_Entity h_Entity;
 typedef struct h_Level h_Level;
 typedef struct h_Config h_Config;
 typedef struct h_HammerMenu h_HammerMenu;
+typedef struct h_EngineControl h_EngineControl;
 
 typedef struct h_EngineState h_EngineState;
 
@@ -153,7 +155,7 @@ struct h_Model {
 	char name[255];
 	u8 type;
 
-	float scale;
+	Vector3 scale;
 	Color tint;
 };
 
@@ -198,6 +200,25 @@ struct h_EngineState {
 	bool debug;
 };
 
+struct h_EngineControl {
+
+	// hero controls
+	int forward;
+	int backward;
+	int strafe_left;
+	int strafe_right;
+	int turn_left;
+	int turn_right;
+	int action;
+	int toggle_run;
+
+	// ui control TODO
+	int pause;
+
+	// trackers
+	bool light;
+};
+
 // globals
 static h_EngineState engine = { .window.title = TITLE,
 				.camera = {0},
@@ -208,6 +229,20 @@ static h_EngineState engine = { .window.title = TITLE,
 				.debug = false,
 				.menu = { 0 },
 				.load_file = "" };
+
+// these are default keys, you can change them in logic config. (TODO)
+static h_EngineControl controls = { .forward = KEY_W,
+				    .backward = KEY_S,
+				    .strafe_left = KEY_A,
+				    .strafe_right = KEY_D,
+				    .turn_left = KEY_LEFT,
+				    .turn_right = KEY_RIGHT,
+				    .action = KEY_SPACE,
+				    .toggle_run = KEY_LEFT_SHIFT,
+
+				    .pause = KEY_P,
+
+				    .light = false };
 
 // fdef
 u8
@@ -356,9 +391,20 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			// input check
-			if(IsKeyPressed(KEY_A)) {
-				engine.current_level->entities[1].currentAnimation++;
-				engine.current_level->entities[1].currentFrame = 1;
+			if(IsKeyDown(controls.forward)) {
+				engine.current_level->hero.position.z += 0.07f * cos(DEG2RAD * engine.current_level->hero.angle);
+			}
+
+			else if(IsKeyDown(controls.backward)) {
+				engine.current_level->hero.position.z -= 0.07f;
+			}
+
+			if(IsKeyDown(controls.turn_left)) {
+				engine.current_level->hero.angle += 5.0f;
+			}
+
+			else if(IsKeyDown(controls.turn_right)) {
+				engine.current_level->hero.angle -= 5.0f; //xx
 			}
 			
 			EndMode3D();
@@ -847,7 +893,8 @@ h_EngineModelLoad(const char *path) {
 		.animate = false,
 		.position = (Vector3) { 0.0f, 0.0f, 0.0f },
 		.tint = WHITE,
-		.scale = 1.0f,
+		.angle = 0.0f,
+		.scale = (Vector3) { 1.0f, 1.0f, 1.0f },
 		.render = true,
 	};
 
@@ -900,7 +947,8 @@ h_EngineModelDraw(h_Model *model) {
 
 		UpdateTransformedBoundingBox(model);
 
-		DrawModel(model->model, model->position, model->scal, model->tint);
+		DrawModelEx(model->model, model->position, (Vector3){0.0f, 1.0f, 0.0f},
+		model->angle, model->scale, model->tint);
 
 		if(engine.debug) {
 			DrawBoundingBox(model->transformedBox, GREEN);

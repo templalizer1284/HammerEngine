@@ -10,6 +10,9 @@ I compiled hammer engine using w64devkit i find it easy to
 use. Compile it unix style.
 
 Unix:
+In you implementation file(used impl.c for example) you must have:
+#define HAMMER_ENGINE_IMPLEMENTATION
+
 Before compiling, we have to know what compiler you want to use and where are libs.
 
 Examples:

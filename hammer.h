@@ -61,6 +61,14 @@
 // i will not write this crap everytime
 typedef uint8_t u8;
 typedef uint16_t u16;
+
+#define U8 255
+#define U6 63
+#define U2 4
+
+// psx-style
+#define FPS 30
+
 #define HE_DECL static inline
 
 // ddecl
@@ -73,39 +81,6 @@ typedef struct h_HammerMenu h_HammerMenu;
 typedef struct h_EngineControl h_EngineControl;
 
 typedef struct h_EngineState h_EngineState;
-
-enum BUTTONS {
-	NEW_GAME,
-	LOAD_GAME,
-	OPTIONS,
-	QUIT
-};
-
-enum ENTITY_TYPE {
-	HERO,
-	MAP,
-	STATIC
-};
-
-// for use within this engine every model must have index of its animations like this
-// starting from 0 for IDLE animation
-// they are in this order because not all entites attack or die, what is common for all
-// entities is that they all have idle and run animations, optionally turning animations.
-enum ANIMATION_POSITIONS {
-	IDLE, // = 0
-	RUN,
-	TURN,
-	DEATH,
-	HIT, // when got hit by an entity
-	ATTACK,
-	COLLISION,
-	STOP, // anim used for stopping after walk/run
-	MISC_ONE, // miscellaneous extra animations, defined in logic
-	MISC_TWO,
-	MISC_THREE,
-	MISC_FOUR,
-	MISC_FIVE
-};
 
 // fdecl
 HE_DECL u8 		h_HammerRun(void);
@@ -120,6 +95,7 @@ HE_DECL u8 		h_HammerLevelRun(const char *);
 
 HE_DECL h_Model 	h_EngineModelLoad(const char *);
 HE_DECL	u8 		h_EngineModelDraw(h_Model *);
+HE_DECL u8		h_EngineModelExists(const char *);
 
 HE_DECL BoundingBox	CombineBoundingBoxes(BoundingBox, BoundingBox);
 HE_DECL void		UpdateTransformedBoundingBox(h_Model *);
@@ -128,6 +104,9 @@ HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
 HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
 
 HE_DECL u8		h_EngineUnload(void);
+
+HE_DECL u8		h_Processor(void *[U8]);
+HE_DECL u8		h_KeywordExists(const char *);
 
 // ddef
 struct h_Window {
@@ -152,7 +131,7 @@ struct h_Model {
 	float angle;
 	bool render;
 
-	char name[255];
+	char name[U8];
 	u8 type;
 
 	Vector3 scale;
@@ -160,30 +139,39 @@ struct h_Model {
 };
 
 struct h_Config {
-	char base[32];
-	char root[32];
-	char level[32];
-	char resources[32];
-	char save[32];
+	char base[U6];
+	char root[U6];
+	char level[U6];
+	char resources[U6];
+	char save[U6];
 };
 
 struct h_Level {
-
 	h_Model hero,map;
 	h_Model entities[MAX_MODELS];
 	u16 entities_count;
-	char name[255];
+	char name[U8];
 
 	// logic info
+	
+	// collision
+	BoundingBox *col_one[U8], *col_two[U8];
+	int col_count;
+
+	// some collision functions take one or more args
+	char col_action_instruction[U8][U8];
+	char col_action_arg[U8][U8];
+	char col_action_arg2[U8][U8];
+	char col_action_arg3[U8][U8];
 };
 
 struct h_HammerMenu {
 	Font button_font, text_font;
-	char button_newgame[20];
-	char button_loadgame[20];
-	char button_options[20];
-	char button_quit[20];
-	char selector[10];
+	char button_newgame[U6];
+	char button_loadgame[U6];
+	char button_options[U6];
+	char button_quit[U6];
+	char selector[U2];
 	Texture2D background_texture;
 	u8 menu_switch;
 };
@@ -193,7 +181,7 @@ struct h_EngineState {
 	Camera camera;
 	const u8 fps;
 	h_Config config;
-	char starting_level[255];
+	char starting_level[U8];
 	h_Level *current_level;
 	char *load_file;
 	h_HammerMenu menu;
@@ -223,10 +211,55 @@ struct h_EngineControl {
 	float run_factor;
 };
 
+enum BUTTONS {
+	NEW_GAME,
+	LOAD_GAME,
+	OPTIONS,
+	QUIT,
+	NUM_OF_BUTTONS
+};
+
+enum MODEL_TYPE {
+	HERO,
+	MAP,
+	ENTITY
+};
+
+enum ENTITY_TYPE {
+	ENTITY_HERO,
+	ENTITY_MAP,
+	ENTITY_STATIC
+};
+
+enum PROCESSOR_INSTRUCTIONS {
+	PRINT, // one arg, const char *
+	NUM_PROCESSOR_KEYWORDS
+};
+
+// for use within this engine every model must have index of its animations like this
+// starting from 0 for IDLE animation
+// they are in this order because not all entites attack or die, what is common for all
+// entities is that they all have idle and run animations, optionally turning animations.
+enum ANIMATION_POSITIONS {
+	IDLE, // = 0
+	RUN,
+	TURN,
+	DEATH,
+	HIT, // when got hit by an entity
+	ATTACK,
+	COLLISION,
+	STOP, // anim used for stopping after walk/run
+	MISC_ONE, // miscellaneous extra animations, defined in logic
+	MISC_TWO,
+	MISC_THREE,
+	MISC_FOUR,
+	MISC_FIVE
+};
+
 // globals
 static h_EngineState engine = { .window.title = TITLE,
 				.camera = {0},
-				.fps = 30,
+				.fps = FPS,
 				.config = {0},
 				.starting_level = "",
 				.current_level = NULL,
@@ -246,8 +279,14 @@ static h_EngineControl controls = { .forward = KEY_W,
 				    .pause = KEY_P,
 
 				    .light = false,
-				    .velocity = 0.07f,
-				    .run_factor = 0.10f };
+
+				    // there is possibility to change this in cfg.root, see README.root
+				    .velocity = 0.035f,
+				    .run_factor = 0.05f };
+
+static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
+	{ "PRINT" }
+};
 
 // fdef
 u8
@@ -305,7 +344,7 @@ h_WindowInit(void) {
 
 	if(access(HAMMERCFG, F_OK) == 0) {
 		FILE *fp = fopen(HAMMERCFG, "r");
-		char tmp[64];
+		char tmp[U6];
 
 		if(fp == NULL) {
 			LOG("HAMMERCFG failed to open, using default values.\n");
@@ -313,7 +352,7 @@ h_WindowInit(void) {
 			engine.window.height = 600;
 		}
 
-		#define ff fscanf(fp, "%63s", tmp)
+		#define ff fscanf(fp, "%60s", tmp)
 		while(ff == 1) {
 			if(strcmp(tmp, "width") == 0) {
 				ff;
@@ -397,7 +436,6 @@ h_HammerLevelRun(const char *level) {
 
 			// input check
 
-			// check is run
 			float speed;
 			
 			if(IsKeyDown(controls.toggle_run)) {
@@ -408,13 +446,14 @@ h_HammerLevelRun(const char *level) {
 				speed = controls.velocity;
 			}
 			
-			if(IsKeyDown(controls.forward)) { //xx
+			if(IsKeyDown(controls.forward)) {
 				engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
 				engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
 			}
 
 			else if(IsKeyDown(controls.backward)) {
-				engine.current_level->hero.position.z -= speed; //xx
+				engine.current_level->hero.position.z -= speed * cos(DEG2RAD * engine.current_level->hero.angle);
+				engine.current_level->hero.position.x -= speed * sin(DEG2RAD * engine.current_level->hero.angle);
 			}
 
 			if(IsKeyDown(controls.turn_left)) {
@@ -422,8 +461,19 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			else if(IsKeyDown(controls.turn_right)) {
-				engine.current_level->hero.angle -= 5.0f; //xx
+				engine.current_level->hero.angle -= 5.0f;
 			}
+
+			if(IsKeyDown(controls.strafe_left)) {
+				engine.current_level->hero.position.x += speed;
+			}
+
+			else if(IsKeyDown(controls.strafe_right)) {
+				engine.current_level->hero.position.x -= speed;
+			}
+
+			// check collisions
+			
 			
 			EndMode3D();
 
@@ -514,8 +564,8 @@ h_EngineParseRoot(void) {
 
 	FILE *fp = fopen(engine.config.root, "r");
 
-	char tmp[64];
-	#define ff fscanf(fp, "%63s", tmp)
+	char tmp[U8];
+	#define ff fscanf(fp, "%60s", tmp)
 
 	while(ff == 1) {
 		if(strcmp(tmp, "DEBUG") == 0) {
@@ -611,8 +661,8 @@ h_EngineParseLevel(const char *path) {
 	(void)snprintf(logic, sizeof(logic),
 	"%s%s%s", path, SEP, CFG_LOGIC);
 
-	FILE *fp = NULL; char tmp[64];
-	#define ff fscanf(fp, "%63s", tmp)
+	FILE *fp = NULL; char tmp[U8];
+	#define ff fscanf(fp, "%60s", tmp)
 
 	static h_Level level;
 
@@ -723,17 +773,6 @@ h_EngineParseLevel(const char *path) {
 				}
 			}
 		}
-
-		if( (fp = fopen(logic, "r")) == NULL ) {
-			LOG("Failed to open logic config for the level.\n");
-			return 1;
-		}
-
-		else {
-			while(ff == 1) {
-				
-			}
-		}
 	}
 
 	else {
@@ -753,33 +792,135 @@ h_EngineParseLevel(const char *path) {
 
 				// get model name
 				ff;
-
-				bool exists = false;
-				int counter = 0;
+				
 				// check if model exists in array
-				for(int i = 0; i < engine.current_level->entities_count; i++) {
-					if(strcmp(tmp, engine.current_level->entities[i].name) == 0) {
-						exists = true;
-						counter = i;
-					}
-				}
+				int counter = h_EngineModelExists(tmp);
 
-				if(exists == true) {
-					float x,y,z;
-					fscanf(fp, "%f %f %f", &x, &y, &z);
-					h_Vec3Mod(engine.current_level->entities[counter].position, x,y,z);
-				}
-
-				else {
+				if(counter < 0) {
 					LOG("Syntax error in level logic, model doesn't exist.\n");
 					return 1;
 				}
+
+				else {
+					float x,y,z;
+					fscanf(fp, "%f %f %f", &x, &y, &z);
+
+					if(counter == HERO) {
+						h_Vec3Mod(engine.current_level->hero.position, x,y,z);
+					}
+
+					else if(counter == MAP) {
+						h_Vec3Mod(engine.current_level->map.position, x,y,z);
+					}
+
+					else {
+						h_Vec3Mod(engine.current_level->entities[counter-ENTITY].position,
+						x,y,z);
+					}
+				}
+
+				continue;
+			}
+
+			else if(strcmp(tmp, "COLLISION") == 0) {
+				char first_model[U8], second_model[U8];
+
+				// getting first model
+				ff;
+				(void)snprintf(first_model, sizeof(first_model),
+				"%s", tmp);
+
+				// getting second model
+				ff;
+				(void)snprintf(second_model, sizeof(second_model),
+				"%s", tmp);
+
+				// checking if not the same, you can never know
+				if(strcmp(first_model, second_model) == 0) {
+					LOG("Syntax error, collision detection on same model is not possible.\n");
+					return 1;
+				}
+
+				// checking if both models are loaded in program
+				int counter = h_EngineModelExists(first_model);
+				
+				if(counter < 0) {
+					LOG("Error, model named %s doesn't exists", tmp);
+					return 1;
+				}
+
+				else {
+					if(counter == HERO) {
+						engine.current_level->col_one[engine.current_level->col_count] =
+						&engine.current_level->hero.transformedBox;
+					}
+
+					else if(counter == MAP) {
+						engine.current_level->col_one[engine.current_level->col_count] =
+						&engine.current_level->map.transformedBox;
+					}
+
+					else {
+						engine.current_level->col_one[engine.current_level->col_count] =
+						&engine.current_level->entities[counter-ENTITY].transformedBox;
+					}
+				}
+
+				counter = h_EngineModelExists(second_model);
+
+				// repeating this crap because i am stupid
+				if(counter < 0) {
+					LOG("Error, model named %s doesn't exists", tmp);
+					return 1;
+				}
+
+				else {
+					if(counter == HERO) {
+						engine.current_level->col_two[engine.current_level->col_count] =
+						&engine.current_level->hero.transformedBox;
+					}
+
+					else if(counter == MAP) {
+						engine.current_level->col_two[engine.current_level->col_count] =
+						&engine.current_level->map.transformedBox;
+					}
+
+					else {
+						engine.current_level->col_two[engine.current_level->col_count] =
+						&engine.current_level->entities[counter-ENTITY].transformedBox;
+					}
+				}
+
+				// getting response to collision
+				ff;
+
+				// checking if keyword exists
+				int kword = h_KeywordExists(tmp);
+
+				if(kword < 0) {
+					LOG("Syntax error, keyword %s doesn't exist.\n", tmp);
+					return 1;
+				}
+
+				else {
+					// take arguments accordingly for every instruction
+					switch(kword) {
+						case PRINT:
+							//xx
+							//FIX GETTING WHOLE LINE
+						break;
+					}
+				}
+
+				engine.current_level->col_count++;
 			}
 
 			else {
 				LOG("Syntax error, %s is unknown keyword in logic.\n", tmp);
 				return 1;
 			}
+
+			
 		}
 	}
 
@@ -801,10 +942,10 @@ h_EngineLoadGame(const char *file) {
 		}
 
 		else {
-			char tmp[64];
-			while(fscanf(fp, "%63s", tmp) == 1) {
+			char tmp[U8];
+			while(fscanf(fp, "%60s", tmp) == 1) {
 				if(strcmp(tmp, "LEVEL") == 0) {
-					fscanf(fp, "%63s", tmp);
+					fscanf(fp, "%60s", tmp);
 					if(atoi(tmp) == 0) {
 						LOG("Loading saved file failed.\n");
 						return 1;
@@ -837,7 +978,6 @@ h_HammerMenuRun(void) {
 
 	#define AR_SIZE 20
 	char buttons[][AR_SIZE] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
-	int num_buttons = (u8)sizeof(buttons) / AR_SIZE;
 	
 	char text[20];
 
@@ -850,7 +990,7 @@ h_HammerMenuRun(void) {
 			DrawTexture(engine.menu.background_texture, 0, 0, WHITE);
 
 			// drawing buttons, newgame,loadgame,options and quit
-			for(int i = 0; i < num_buttons; i++) {
+			for(int i = 0; i < NUM_OF_BUTTONS; i++) {
 
 				if(i == engine.menu.menu_switch) {
 					(void)memset(text, 0, strlen(text));
@@ -871,7 +1011,7 @@ h_HammerMenuRun(void) {
 
 			// check for keyboard input, to change selector
 			if(IsKeyPressed(KEY_DOWN)) {
-				if(engine.menu.menu_switch == (num_buttons - 1)) {
+				if(engine.menu.menu_switch == (NUM_OF_BUTTONS - 1)) {
 					engine.menu.menu_switch = 0;
 				}
 
@@ -882,7 +1022,7 @@ h_HammerMenuRun(void) {
 			
 			else if(IsKeyPressed(KEY_UP)) {
 				if(engine.menu.menu_switch == 0) {
-					engine.menu.menu_switch = num_buttons - 1;
+					engine.menu.menu_switch = NUM_OF_BUTTONS - 1;
 				}
 
 				else {
@@ -980,6 +1120,34 @@ h_EngineModelDraw(h_Model *model) {
 	return 0;
 }
 
+u8
+h_EngineModelExists(const char *name) {
+
+	// returns index of model in current level
+	// 0 = hero
+	// 1 = map
+	// >1 = entity
+	// -1 = doesn't exist
+
+	if(strcmp(name, engine.current_level->hero.name) == 0) {
+		return HERO;
+	}
+
+	else if(strcmp(name, engine.current_level->map.name) == 0) {
+		return MAP;
+	}
+
+	else {
+		for(int i = 0; i < engine.current_level->entities_count; i++) {
+			if(strcmp(name, engine.current_level->entities[i].name) == 0) {
+				return i + ENTITY;
+			}
+		}
+	}
+
+	return -1;
+}
+
 BoundingBox
 CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
 	BoundingBox combined;
@@ -1006,6 +1174,28 @@ h_EngineUnload(void) {
 	UnloadFont(engine.menu.button_font);
 
 	return 0;
+}
+
+u8
+h_Processor(void *args[U8]) {
+
+	int i = 10;
+	args[0] = &i;
+
+	return (uintptr_t)args[0]; //xx
+}
+
+u8
+h_KeywordExists(const char *keyword) {
+
+	// returns index of keyword if exists
+	for(int i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {
+		if(strcmp(keyword, Processor_Keywords[i][0]) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 #endif // HAMMER_ENGINE_IMPLEMENTATION end

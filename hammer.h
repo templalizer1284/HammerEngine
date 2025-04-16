@@ -6,6 +6,7 @@
 // Core C
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -103,9 +104,11 @@ HE_DECL void		UpdateTransformedBoundingBox(h_Model *);
 HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
 HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
 
+HE_DECL void		h_Processor(int, ...);
 HE_DECL u8		h_EngineUnload(void);
 
-HE_DECL u8		h_Processor(void *[U8]);
+// non-posix, stack-only, memory-safe getline, not the fastest but its OK
+HE_DECL void		h_EngineGetline(FILE *, char *, size_t);
 HE_DECL u8		h_KeywordExists(const char *);
 
 // ddef
@@ -156,13 +159,16 @@ struct h_Level {
 	
 	// collision
 	BoundingBox *col_one[U8], *col_two[U8];
-	int col_count;
+	u16 col_count;
 
 	// some collision functions take one or more args
-	char col_action_instruction[U8][U8];
-	char col_action_arg[U8][U8];
+	u8 col_action_instruction[U8];
+	
+	char col_action_arg1[U8][U8];
 	char col_action_arg2[U8][U8];
 	char col_action_arg3[U8][U8];
+	char col_action_arg4[U8][U8];
+	char col_action_arg5[U8][U8];
 };
 
 struct h_HammerMenu {
@@ -258,9 +264,7 @@ enum ANIMATION_POSITIONS {
 
 // globals
 static h_EngineState engine = { .window.title = TITLE,
-				.camera = {0},
 				.fps = FPS,
-				.config = {0},
 				.starting_level = "",
 				.current_level = NULL,
 				.debug = false,
@@ -473,7 +477,15 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			// check collisions
-			
+			for(int i = 0; i < engine.current_level->col_count; i++) {
+				if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
+					switch(engine.current_level->col_action_instruction[i]) {
+						case PRINT:
+							h_Processor(2, PRINT, (const char *)engine.current_level->col_action_arg1[i]);
+						break; //xx
+					};
+				}
+			}
 			
 			EndMode3D();
 
@@ -904,10 +916,20 @@ h_EngineParseLevel(const char *path) {
 
 				else {
 					// take arguments accordingly for every instruction
+
+					engine.current_level->col_count = -1;
+					
 					switch(kword) {
 						case PRINT:
+							engine.current_level->col_count++;
+							h_EngineGetline(fp, tmp, sizeof(tmp));
+							
+							engine.current_level->col_action_instruction[engine.current_level->col_count] = kword;
+							
+							(void)snprintf(engine.current_level->col_action_arg1[engine.current_level->col_count],
+							sizeof(engine.current_level->col_action_arg1[engine.current_level->col_count]),
+							"%s", tmp);
 							//xx
-							//FIX GETTING WHOLE LINE
 						break;
 					}
 				}
@@ -1168,21 +1190,27 @@ UpdateTransformedBoundingBox(h_Model *model) {
 	model->transformedBox.max = Vector3Add(model->box.max, model->position);
 }
 
+void
+h_Processor(int count, ...) {
+
+	va_list args;
+	va_start(args, count);
+
+	switch(va_arg(args, int)) {
+		case PRINT:
+			LOG("%s\n", va_arg(args, const char *));
+		break;
+	}
+
+	va_end(args); //xx
+}
+
 u8
 h_EngineUnload(void) {
 
 	UnloadFont(engine.menu.button_font);
 
 	return 0;
-}
-
-u8
-h_Processor(void *args[U8]) {
-
-	int i = 10;
-	args[0] = &i;
-
-	return (uintptr_t)args[0]; //xx
 }
 
 u8
@@ -1196,6 +1224,37 @@ h_KeywordExists(const char *keyword) {
 	}
 
 	return -1;
+}
+
+void
+h_EngineGetline(FILE *fp, char *dst, size_t size) {
+
+	(void)memset(dst, 0, size);
+	
+	u16 i = 0;
+	char c = 0;
+	u8 skip = 0;
+	
+	while(i != size) {
+		fscanf(fp, "%c", &c);
+
+		// skip first whitespace
+		if(skip == 0) {
+			skip++;
+			continue;
+		}
+		
+		if(c == 0x0A) {
+			break;
+		}
+		
+		else {
+			dst[i] = c;
+		}
+		
+		i++;
+	}
+
 }
 
 #endif // HAMMER_ENGINE_IMPLEMENTATION end

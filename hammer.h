@@ -481,7 +481,7 @@ h_HammerLevelRun(const char *level) {
 				if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
 					switch(engine.current_level->col_action_instruction[i]) {
 						case PRINT:
-							h_Processor(2, PRINT, (const char *)engine.current_level->col_action_arg1[i]);
+							h_Processor(2, PRINT, (void *)engine.current_level->col_action_arg1[i]);
 						break; //xx
 					};
 				}
@@ -917,11 +917,8 @@ h_EngineParseLevel(const char *path) {
 				else {
 					// take arguments accordingly for every instruction
 
-					engine.current_level->col_count = -1;
-					
 					switch(kword) {
 						case PRINT:
-							engine.current_level->col_count++;
 							h_EngineGetline(fp, tmp, sizeof(tmp));
 							
 							engine.current_level->col_action_instruction[engine.current_level->col_count] = kword;
@@ -933,7 +930,7 @@ h_EngineParseLevel(const char *path) {
 						break;
 					}
 				}
-
+				
 				engine.current_level->col_count++;
 			}
 

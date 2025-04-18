@@ -20,7 +20,7 @@ TYPE:
 
 STATIC
 - model that just exists and does nothing on its own, usefull when you want something to be added
-additionally in map but don't want to mess with map itself.
+additionally in map but don't want to mess with map itself. It has no stats, no triggers no health...
 
 arg is filename in media folder.
 

@@ -32,6 +32,7 @@
 #define BASE_MEDIA "media"
 #define BASE_SAVE "save"
 #define TITLE "Hammer Engine"
+#define PAUSED_TEXT "PAUSED"
 
 // dev-only, to be removed once save/load is implemented
 #define LOAD_FILE "aca.sav"
@@ -53,11 +54,7 @@
 #define SEP "\\"
 #endif
 
-#ifdef DEBUG
-	#define LOG printf
-#else
-	#define LOG(...) ((void)0)
-#endif
+#define LOG printf
 
 // i will not write this crap everytime
 typedef uint8_t u8;
@@ -90,16 +87,14 @@ HE_DECL u8 		h_EngineParseBase(void);
 HE_DECL u8 		h_EngineParseRoot(void);
 HE_DECL u8 		h_EngineParseLevel(const char *);
 
-HE_DECL u8 		h_HammerIntro(void); // TODO
-HE_DECL u8 		h_HammerMenuRun(void);
 HE_DECL u8 		h_HammerLevelRun(const char *);
 
 HE_DECL h_Model 	h_EngineModelLoad(const char *);
 HE_DECL	u8 		h_EngineModelDraw(h_Model *);
 HE_DECL u8		h_EngineModelExists(const char *);
 
-HE_DECL BoundingBox	CombineBoundingBoxes(BoundingBox, BoundingBox);
-HE_DECL void		UpdateTransformedBoundingBox(h_Model *);
+HE_DECL BoundingBox	h_CombineBoundingBoxes(BoundingBox, BoundingBox);
+HE_DECL void		h_UpdateTransformedBoundingBox(h_Model *);
 
 HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
 HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
@@ -149,6 +144,17 @@ struct h_Config {
 	char save[U6];
 };
 
+struct h_HammerMenu {
+	Font button_font, text_font;
+	char button_newgame[U6];
+	char button_loadgame[U6];
+	char button_options[U6];
+	char button_quit[U6];
+	char selector[U2];
+	Texture2D background_texture;
+	u8 menu_switch;
+};
+
 struct h_Level {
 	h_Model hero,map;
 	h_Model entities[MAX_MODELS];
@@ -171,27 +177,22 @@ struct h_Level {
 	char col_action_arg5[U8][U8];
 };
 
-struct h_HammerMenu {
-	Font button_font, text_font;
-	char button_newgame[U6];
-	char button_loadgame[U6];
-	char button_options[U6];
-	char button_quit[U6];
-	char selector[U2];
-	Texture2D background_texture;
-	u8 menu_switch;
-};
-
 struct h_EngineState {
 	h_Window window;
 	Camera camera;
 	const u8 fps;
+	
 	h_Config config;
+	h_HammerMenu menu;
+	
 	char starting_level[U8];
 	h_Level *current_level;
+	
 	char *load_file;
-	h_HammerMenu menu;
+
 	bool debug;
+	bool light;
+	bool pause;
 
 	void *cvars[];
 };
@@ -206,35 +207,19 @@ struct h_EngineControl {
 	int turn_left;
 	int turn_right;
 	int action;
+	
 	int toggle_run;
+	int toggle_light;
+	int toggle_pause;
 
-	// ui control TODO
-	int pause;
-
-	// trackers
-	bool light;
 	float velocity;
 	float run_factor;
-};
-
-enum BUTTONS {
-	NEW_GAME,
-	LOAD_GAME,
-	OPTIONS,
-	QUIT,
-	NUM_OF_BUTTONS
 };
 
 enum MODEL_TYPE {
 	HERO,
 	MAP,
 	ENTITY
-};
-
-enum ENTITY_TYPE {
-	ENTITY_HERO,
-	ENTITY_MAP,
-	ENTITY_STATIC
 };
 
 enum PROCESSOR_INSTRUCTIONS {
@@ -267,9 +252,11 @@ static h_EngineState engine = { .window.title = TITLE,
 				.fps = FPS,
 				.starting_level = "",
 				.current_level = NULL,
-				.debug = false,
 				.menu = { 0 },
-				.load_file = "" };
+				.debug = false,
+				.load_file = "",
+				.light = false,
+				.pause = false, };
 
 static h_EngineControl controls = { .forward = KEY_W,
 				    .backward = KEY_S,
@@ -278,15 +265,13 @@ static h_EngineControl controls = { .forward = KEY_W,
 				    .turn_left = KEY_LEFT,
 				    .turn_right = KEY_RIGHT,
 				    .action = KEY_SPACE,
+				    
 				    .toggle_run = KEY_LEFT_SHIFT,
+				    .toggle_pause = KEY_P,
+				    .toggle_light = KEY_L,
 
-				    .pause = KEY_P,
-
-				    .light = false,
-
-				    // there is possibility to change this in cfg.root, see README.root
-				    .velocity = 0.035f,
-				    .run_factor = 0.05f };
+				    .velocity = 0.05f,
+				    .run_factor = 0.065f, };
 
 static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
 	{ "PRINT" }
@@ -299,12 +284,12 @@ h_HammerRun(void) {
 	LOG("Hammer Engine Running, BattleCruiser operational.\n");
 
 	if(h_WindowInit()) {
-		perror("Window Initialization failed. Aborting.");
+		LOG("Window Initialization failed. Aborting.");
 		return 1;
 	}
 
 	if(h_EngineParseBase()) {
-		perror("Engine Base folder parsing failed. Aborting.");
+		LOG("Engine Base folder parsing failed. Aborting.");
 		return 1;
 	}
 
@@ -313,33 +298,11 @@ h_HammerRun(void) {
 		return 1;
 	}
 
-	switch(h_HammerMenuRun()) {
-
-		case NEW_GAME:
-			if(h_HammerLevelRun(engine.starting_level)) {
-				LOG("Level running error.\n");
-				return 1;
-			};
-		break;
-
-		case LOAD_GAME:
-			LOG("Load game not yet implemented.\n");
-		break;
-
-		case OPTIONS:
-			LOG("Options not yet implemented.\n");
-		break;
-
-		case QUIT:
-			return 0;
-		break;
-	
-		default:
-			LOG("Menu drawing error.\n");
-			return 1;
-		break;
+	if(h_HammerLevelRun(engine.starting_level)) {
+		LOG("Level running error.\n");
+		return 1;
 	}
-	
+
 	return 0;
 }
 
@@ -422,6 +385,14 @@ h_HammerLevelRun(const char *level) {
 	while(!WindowShouldClose()) {
 
 		BeginDrawing();
+
+			if(engine.pause) {
+				if(IsKeyPressed(controls.toggle_pause)) {
+					engine.pause = false;
+				}
+				goto PAUSE;
+			}
+			
 			ClearBackground(DARKBLUE);
 			BeginMode3D(engine.camera);
 
@@ -476,17 +447,22 @@ h_HammerLevelRun(const char *level) {
 				engine.current_level->hero.position.x -= speed;
 			}
 
+			if(IsKeyPressed(controls.toggle_pause)) {
+				engine.pause = true;
+			}
+
 			// check collisions
 			for(int i = 0; i < engine.current_level->col_count; i++) {
 				if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
 					switch(engine.current_level->col_action_instruction[i]) {
 						case PRINT:
-							h_Processor(2, PRINT, (void *)engine.current_level->col_action_arg1[i]);
-						break; //xx
+							h_Processor(2, PRINT, engine.current_level->col_action_arg1[i]);
+						break;
 					};
 				}
 			}
-			
+
+			PAUSE:
 			EndMode3D();
 
 			if(engine.debug) {
@@ -588,7 +564,7 @@ h_EngineParseRoot(void) {
 		else if(strcmp(tmp, "BACKGROUND") == 0) {
 			ff;
 
-			char full_path[256];
+			char full_path[U8];
 			(void)snprintf(full_path, sizeof(full_path),
 			"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
 				
@@ -597,7 +573,7 @@ h_EngineParseRoot(void) {
 			}
 
 			else {
-				perror("Cannot open menu background image.");
+				LOG("Cannot open menu background image.");
 				return 1;
 			}
 
@@ -926,7 +902,6 @@ h_EngineParseLevel(const char *path) {
 							(void)snprintf(engine.current_level->col_action_arg1[engine.current_level->col_count],
 							sizeof(engine.current_level->col_action_arg1[engine.current_level->col_count]),
 							"%s", tmp);
-							//xx
 						break;
 					}
 				}
@@ -992,74 +967,6 @@ h_EngineLoadGame(const char *file) {
 	return 0;
 }
 
-u8
-h_HammerMenuRun(void) {
-
-	#define AR_SIZE 20
-	char buttons[][AR_SIZE] = { {"New Game"}, {"Load Game"}, {"Options"}, {"Quit"} };
-	
-	char text[20];
-
-	while(!WindowShouldClose()) {
-		BeginDrawing();
-
-			if(engine.debug) DrawFPS(10.0f, 10.0f);
-
-			// drawing background image
-			DrawTexture(engine.menu.background_texture, 0, 0, WHITE);
-
-			// drawing buttons, newgame,loadgame,options and quit
-			for(int i = 0; i < NUM_OF_BUTTONS; i++) {
-
-				if(i == engine.menu.menu_switch) {
-					(void)memset(text, 0, strlen(text));
-					(void)snprintf(text, sizeof(text),
-					"%s %s", buttons[i], engine.menu.selector);
-				}
-
-				else {
-					(void)memset(text, 0, strlen(text));
-					(void)snprintf(text, sizeof(text), "%s", buttons[i]);
-				}
-				
-				DrawTextEx(engine.menu.button_font, text,
-				(Vector2){(float)engine.window.width / 4,
-				((float)engine.window.height / 2) + (float)i * 50.0f},
-				(float)engine.menu.button_font.baseSize, 2, MAROON);
-			}
-
-			// check for keyboard input, to change selector
-			if(IsKeyPressed(KEY_DOWN)) {
-				if(engine.menu.menu_switch == (NUM_OF_BUTTONS - 1)) {
-					engine.menu.menu_switch = 0;
-				}
-
-				else {
-					engine.menu.menu_switch++;
-				}
-			}
-			
-			else if(IsKeyPressed(KEY_UP)) {
-				if(engine.menu.menu_switch == 0) {
-					engine.menu.menu_switch = NUM_OF_BUTTONS - 1;
-				}
-
-				else {
-					engine.menu.menu_switch--;
-				}
-
-			}
-
-			if(IsKeyDown(KEY_ENTER)) {
-				break;
-			}
-			
-		EndDrawing();
-	}
-
-	return engine.menu.menu_switch;
-}
-
 h_Model
 h_EngineModelLoad(const char *path) {
 
@@ -1099,7 +1006,7 @@ h_EngineModelLoad(const char *path) {
 
 	for(int i = 1; i < model.model.meshCount; i++) {
 		BoundingBox currentBox = GetMeshBoundingBox(model.model.meshes[i]);
-		model.box = CombineBoundingBoxes(model.box, currentBox);
+		model.box = h_CombineBoundingBoxes(model.box, currentBox);
 	}
 
 	return model;
@@ -1122,7 +1029,7 @@ h_EngineModelDraw(h_Model *model) {
 				model->currentFrame);
 		}
 
-		UpdateTransformedBoundingBox(model);
+		h_UpdateTransformedBoundingBox(model);
 
 		DrawModelEx(model->model, model->position, (Vector3){0.0f, 1.0f, 0.0f},
 		model->angle, model->scale, model->tint);
@@ -1168,7 +1075,7 @@ h_EngineModelExists(const char *name) {
 }
 
 BoundingBox
-CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
+h_CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
 	BoundingBox combined;
 
 	combined.min.x = fmin(box1.min.x, box2.min.x);
@@ -1182,7 +1089,7 @@ CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
 }
 
 void
-UpdateTransformedBoundingBox(h_Model *model) {
+h_UpdateTransformedBoundingBox(h_Model *model) {
 	model->transformedBox.min = Vector3Add(model->box.min, model->position);
 	model->transformedBox.max = Vector3Add(model->box.max, model->position);
 }
@@ -1199,14 +1106,11 @@ h_Processor(int count, ...) {
 		break;
 	}
 
-	va_end(args); //xx
+	va_end(args);
 }
 
 u8
 h_EngineUnload(void) {
-
-	UnloadFont(engine.menu.button_font);
-
 	return 0;
 }
 

@@ -10,3 +10,14 @@ POSITION arg float float float
 model must be loaded in game of course before using this keyword or error will occur.
 
 EX: POSITION hero.glb 1.0 1.0 1.0
+
+COLLISION first_model second_model arg ...
+- collision function, it takes first_model and second_model as a trigger, model names must be
+their corresponding file names(hero.glb, cube.glb) from media folder.
+
+arg is a response to model collisions
+
+Collision responses:
+PRINT arg
+- prints arg to stdout
+EX: COLLISION hero.glb cube.glb PRINT Hero and Cube touched!

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
@@ -27,7 +28,7 @@
 #define CFG_LEVEL "cfg.level"
 #define CFG_ROOT "cfg.root"
 #define CFG_RESOURCES "cfg.resources"
-#define CFG_LOGIC "cfg.logic"
+#define CFG_printfIC "cfg.logic"
 #define BASE_LEVELS "levels"
 #define BASE_MEDIA "media"
 #define BASE_SAVE "save"
@@ -53,8 +54,6 @@
 #undef SEP
 #define SEP "\\"
 #endif
-
-#define LOG printf
 
 // i will not write this crap everytime
 typedef uint8_t u8;
@@ -83,15 +82,17 @@ typedef struct h_EngineState h_EngineState;
 // fdecl
 HE_DECL u8 		h_HammerRun(void);
 HE_DECL u8 		h_WindowInit(void);
+
+HE_DECL u8 		h_HammerLevelRun(const char *);
+
 HE_DECL u8 		h_EngineParseBase(void);
 HE_DECL u8 		h_EngineParseRoot(void);
 HE_DECL u8 		h_EngineParseLevel(const char *);
 
-HE_DECL u8 		h_HammerLevelRun(const char *);
-
 HE_DECL h_Model 	h_EngineModelLoad(const char *);
 HE_DECL	u8 		h_EngineModelDraw(h_Model *);
 HE_DECL u8		h_EngineModelExists(const char *);
+HE_DECL u8		h_EngineModelChangeAnimation(h_Model *, int);
 
 HE_DECL BoundingBox	h_CombineBoundingBoxes(BoundingBox, BoundingBox);
 HE_DECL void		h_UpdateTransformedBoundingBox(h_Model *);
@@ -233,12 +234,13 @@ enum PROCESSOR_INSTRUCTIONS {
 // entities is that they all have idle and run animations, optionally turning animations.
 enum ANIMATION_POSITIONS {
 	IDLE, // = 0
+	WALK,
 	RUN,
+	ATTACK,
 	TURN,
 	DEATH,
-	HIT, // when got hit by an entity
-	ATTACK,
 	COLLISION,
+	HIT, // when got hit by an entity
 	STOP, // anim used for stopping after walk/run
 	MISC_ONE, // miscellaneous extra animations, defined in logic
 	MISC_TWO,
@@ -281,25 +283,25 @@ static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
 u8
 h_HammerRun(void) {
 
-	LOG("Hammer Engine Running, BattleCruiser operational.\n");
+	printf("Hammer Engine Running, BattleCruiser operational.\n");
 
 	if(h_WindowInit()) {
-		LOG("Window Initialization failed. Aborting.");
+		printf("Window Initialization failed. Aborting.");
 		return 1;
 	}
 
 	if(h_EngineParseBase()) {
-		LOG("Engine Base folder parsing failed. Aborting.");
+		printf("Engine Base folder parsing failed. Aborting.");
 		return 1;
 	}
 
 	if(h_EngineParseRoot()) {
-		LOG("Error occured while parsing root cfg.\n");
+		printf("Error occured while parsing root cfg.\n");
 		return 1;
 	}
 
 	if(h_HammerLevelRun(engine.starting_level)) {
-		LOG("Level running error.\n");
+		printf("Level running error.\n");
 		return 1;
 	}
 
@@ -314,7 +316,7 @@ h_WindowInit(void) {
 		char tmp[U6];
 
 		if(fp == NULL) {
-			LOG("HAMMERCFG failed to open, using default values.\n");
+			printf("HAMMERCFG failed to open, using default values.\n");
 			engine.window.width = 800;
 			engine.window.height = 600;
 		}
@@ -341,7 +343,7 @@ h_WindowInit(void) {
 			}
 
 			else {
-				perror("Syntax error in HAMMERCFG.");
+				printf("Syntax error in HAMMERCFG.");
 				return 1;
 			}
 		}
@@ -350,7 +352,7 @@ h_WindowInit(void) {
 	}
 
 	else {
-		LOG("HAMMERCFG failed to open, using default settings.\n");
+		printf("HAMMERCFG failed to open, using default settings.\n");
 		engine.window.width = 800;
 		engine.window.height = 600;
 		return 1;
@@ -378,7 +380,7 @@ u8
 h_HammerLevelRun(const char *level) {
 
 	if(h_EngineParseLevel(level)) {
-		LOG("Level parsing error.\n");
+		printf("Level parsing error.\n");
 		return 1;
 	}
 
@@ -390,6 +392,7 @@ h_HammerLevelRun(const char *level) {
 				if(IsKeyPressed(controls.toggle_pause)) {
 					engine.pause = false;
 				}
+
 				goto PAUSE;
 			}
 			
@@ -410,9 +413,12 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			// input check
+			// if there is no input set HERO animation to IDLE
+			h_EngineModelChangeAnimation(
+				&engine.current_level->hero, IDLE);
 
 			float speed;
-			
+
 			if(IsKeyDown(controls.toggle_run)) {
 				speed = controls.velocity + controls.run_factor;
 			}
@@ -424,11 +430,17 @@ h_HammerLevelRun(const char *level) {
 			if(IsKeyDown(controls.forward)) {
 				engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
 				engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
+
+				h_EngineModelChangeAnimation(
+					&engine.current_level->hero, WALK);
 			}
 
 			else if(IsKeyDown(controls.backward)) {
 				engine.current_level->hero.position.z -= speed * cos(DEG2RAD * engine.current_level->hero.angle);
 				engine.current_level->hero.position.x -= speed * sin(DEG2RAD * engine.current_level->hero.angle);
+
+				h_EngineModelChangeAnimation(
+					&engine.current_level->hero, WALK);
 			}
 
 			if(IsKeyDown(controls.turn_left)) {
@@ -497,7 +509,7 @@ h_EngineParseBase(void) {
 		
 		DIR *dir = opendir(levels_folder);
 		if(dir == NULL) {
-			LOG("Unable to open base folder.\n");
+			printf("Unable to open base folder.\n");
 			return 1;
 		}
 
@@ -515,7 +527,7 @@ h_EngineParseBase(void) {
 				// check if file is actually a folder
 				if( stat(full_path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode) );
 				else {
-					LOG("File %s is not a folder, put only levels inside levels folder.\n", full_path);
+					printf("File %s is not a folder, put only levels inside levels folder.\n", full_path);
 					return 1;
 				}
 			}
@@ -533,13 +545,13 @@ h_EngineParseBase(void) {
 		"%s%s%s", engine.config.base, SEP, BASE_LEVELS);
 
 		if(access(engine.config.root, F_OK) != 0) {
-			LOG("Base root config not found.\n");
+			printf("Base root config not found.\n");
 			return 1;
 		}
 	}
 
 	else {
-		perror("Base folder provided in HAMMERCFG cannot be opened. Aborting.");
+		printf("Base folder provided in HAMMERCFG cannot be opened. Aborting.");
 		return 1;
 	}
 
@@ -573,7 +585,7 @@ h_EngineParseRoot(void) {
 			}
 
 			else {
-				LOG("Cannot open menu background image.");
+				printf("Cannot open menu background image.");
 				return 1;
 			}
 
@@ -592,7 +604,7 @@ h_EngineParseRoot(void) {
 			}
 
 			else {
-				LOG("Could not load font file %s.", tmp);
+				printf("Could not load font file %s.", tmp);
 				return 1;
 			}
 
@@ -621,7 +633,7 @@ h_EngineParseRoot(void) {
 			}
 
 			else {
-				LOG("Level %s doesn't exist.\n", tmp);
+				printf("Level %s doesn't exist.\n", tmp);
 				return 1;
 			}
 
@@ -629,7 +641,7 @@ h_EngineParseRoot(void) {
 		}
 
 		else {
-			LOG("Syntax error in cfg.root, instruction '%s' not recognized.\n", tmp);
+			printf("Syntax error in cfg.root, instruction '%s' not recognized.\n", tmp);
 			return 1;
 		}
 	}
@@ -647,7 +659,7 @@ h_EngineParseLevel(const char *path) {
 	"%s%s%s", path, SEP, CFG_RESOURCES);
 
 	(void)snprintf(logic, sizeof(logic),
-	"%s%s%s", path, SEP, CFG_LOGIC);
+	"%s%s%s", path, SEP, CFG_printfIC);
 
 	FILE *fp = NULL; char tmp[U8];
 	#define ff fscanf(fp, "%60s", tmp)
@@ -662,7 +674,7 @@ h_EngineParseLevel(const char *path) {
 	// parsing resources
 	if(access(resources, F_OK) == 0 && access(logic, F_OK) == 0) {
 		if( (fp = fopen(resources, "r")) == NULL ) {
-			LOG("Failed to open resources config for the level.\n");
+			printf("Failed to open resources config for the level.\n");
 			return 1;
 		}
 
@@ -670,7 +682,7 @@ h_EngineParseLevel(const char *path) {
 			while(ff == 1) {
 				if(strcmp(tmp, "HERO") == 0) {
 					ff;
-					char p[255];
+					char p[U8];
 					(void)snprintf(p, sizeof(p),
 					"%s%s%s", engine.config.resources, SEP, tmp);
 					
@@ -685,7 +697,7 @@ h_EngineParseLevel(const char *path) {
 					}
 
 					else {
-						LOG("Hero model %s cannot be loaded.\n", tmp);
+						printf("Hero model %s cannot be loaded.\n", tmp);
 						return 1;
 					}
 
@@ -695,7 +707,7 @@ h_EngineParseLevel(const char *path) {
 				else if(strcmp(tmp, "MAP") == 0) {
 					ff;
 
-					char p[255];
+					char p[U8];
 					(void)snprintf(p, sizeof(p),
 					"%s%s%s", engine.config.resources, SEP, tmp);
 					
@@ -710,7 +722,7 @@ h_EngineParseLevel(const char *path) {
 					}
 
 					else {
-						LOG("Map model %s cannot be loaded.\n", tmp);
+						printf("Map model %s cannot be loaded.\n", tmp);
 						return 1;
 					}
 
@@ -723,7 +735,7 @@ h_EngineParseLevel(const char *path) {
 					if(strcmp(tmp, "STATIC") == 0) {
 						ff;
 
-						char full_path[255];
+						char full_path[U8];
 						(void)snprintf(full_path, sizeof(full_path),
 						"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
 						
@@ -731,7 +743,7 @@ h_EngineParseLevel(const char *path) {
 							FILE *fpp = fopen(full_path, "r");
 
 							if(fpp == NULL) {
-								LOG("Cannot open %s entity.\n", tmp);
+								printf("Cannot open %s entity.\n", tmp);
 								return 1;
 							}
 
@@ -742,13 +754,13 @@ h_EngineParseLevel(const char *path) {
 						}
 
 						else {
-							LOG("Cannot access %s entity.\n", tmp);
+							printf("Cannot access %s entity.\n", tmp);
 							return 1;
 						}
 					}
 
 					else {
-						LOG("Unknown entity type '%s' in level config.\n", tmp);
+						printf("Unknown entity type '%s' in level config.\n", tmp);
 						return 1;
 					}
 
@@ -756,7 +768,7 @@ h_EngineParseLevel(const char *path) {
 				}
 
 				else {
-					LOG("Syntax error in resources config, %s unrecognized.\n", tmp);
+					printf("Syntax error in resources config, %s unrecognized.\n", tmp);
 					return 1;
 				}
 			}
@@ -764,13 +776,13 @@ h_EngineParseLevel(const char *path) {
 	}
 
 	else {
-		LOG("Cannot open config file for resources or logic.\n");
+		printf("Cannot open config file for resources or logic.\n");
 		return 1;
 	}
 
 	// parsing logic
 	if( (fp = fopen(logic, "r")) == NULL) {
-		LOG("Cannot open logic for current level.\n");
+		printf("Cannot open logic for current level.\n");
 		return 1;
 	}
 
@@ -785,7 +797,7 @@ h_EngineParseLevel(const char *path) {
 				int counter = h_EngineModelExists(tmp);
 
 				if(counter < 0) {
-					LOG("Syntax error in level logic, model doesn't exist.\n");
+					printf("Syntax error in level logic, model doesn't exist.\n");
 					return 1;
 				}
 
@@ -825,7 +837,7 @@ h_EngineParseLevel(const char *path) {
 
 				// checking if not the same, you can never know
 				if(strcmp(first_model, second_model) == 0) {
-					LOG("Syntax error, collision detection on same model is not possible.\n");
+					printf("Syntax error, collision detection on same model is not possible.\n");
 					return 1;
 				}
 
@@ -833,7 +845,7 @@ h_EngineParseLevel(const char *path) {
 				int counter = h_EngineModelExists(first_model);
 				
 				if(counter < 0) {
-					LOG("Error, model named %s doesn't exists", tmp);
+					printf("Error, model named %s doesn't exists", tmp);
 					return 1;
 				}
 
@@ -858,7 +870,7 @@ h_EngineParseLevel(const char *path) {
 
 				// repeating this crap because i am stupid
 				if(counter < 0) {
-					LOG("Error, model named %s doesn't exists", tmp);
+					printf("Error, model named %s doesn't exists", tmp);
 					return 1;
 				}
 
@@ -886,7 +898,7 @@ h_EngineParseLevel(const char *path) {
 				int kword = h_KeywordExists(tmp);
 
 				if(kword < 0) {
-					LOG("Syntax error, keyword %s doesn't exist.\n", tmp);
+					printf("Syntax error, keyword %s doesn't exist.\n", tmp);
 					return 1;
 				}
 
@@ -910,57 +922,12 @@ h_EngineParseLevel(const char *path) {
 			}
 
 			else {
-				LOG("Syntax error, %s is unknown keyword in logic.\n", tmp);
+				printf("Syntax error, %s is unknown keyword in logic.\n", tmp);
 				return 1;
 			}
 
 			
 		}
-	}
-
-	fclose(fp);
-	return 0;
-}
-
-u8
-h_EngineLoadGame(const char *file) {
-
-	FILE *fp = NULL;
-
-	if(access(file, F_OK) == 0) {
-
-		fp = fopen(file, "r");
-		if(fp == NULL) {
-			perror("Failed to open file.");
-			return 1;
-		}
-
-		else {
-			char tmp[U8];
-			while(fscanf(fp, "%60s", tmp) == 1) {
-				if(strcmp(tmp, "LEVEL") == 0) {
-					fscanf(fp, "%60s", tmp);
-					if(atoi(tmp) == 0) {
-						LOG("Loading saved file failed.\n");
-						return 1;
-					}
-
-					else {
-						//engine.current_level = &engine.levels[atoi(tmp)];
-					}
-				}
-
-				else {
-					perror("Syntax error while reading save file.");
-					return 1;
-				}
-			}
-		}
-	}
-
-	else {
-		LOG("Cannot not open file '%s'\n", file);
-		return 1;
 	}
 
 	fclose(fp);
@@ -999,7 +966,7 @@ h_EngineModelLoad(const char *path) {
 	(void)snprintf(model.name, sizeof(model.name),
 	"%s", basename((char *)path));
 
-	LOG("Num of animations for model %s is %d.\n", model.name, model.animCount);
+	printf("Num of animations for model %s is %d.\n", model.name, model.animCount);
 
 	// generating bounding box
 	model.box = GetMeshBoundingBox(model.model.meshes[0]);
@@ -1028,7 +995,7 @@ h_EngineModelDraw(h_Model *model) {
 				model->animations[model->currentAnimation],
 				model->currentFrame);
 		}
-
+		
 		h_UpdateTransformedBoundingBox(model);
 
 		DrawModelEx(model->model, model->position, (Vector3){0.0f, 1.0f, 0.0f},
@@ -1074,6 +1041,22 @@ h_EngineModelExists(const char *name) {
 	return -1;
 }
 
+u8
+h_EngineModelChangeAnimation(h_Model *model, int animation) {
+
+	if(animation > model->animCount) {
+		printf("Model animation error, animation number greater than number of animations.\n");
+		printf("Model %s anims: %d, Called anim num: %d\n", model->name, model->animCount, animation);
+		return 1;
+	}
+
+	else {
+		model->currentAnimation = animation;
+	}
+
+	return 0;
+}
+
 BoundingBox
 h_CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
 	BoundingBox combined;
@@ -1094,6 +1077,57 @@ h_UpdateTransformedBoundingBox(h_Model *model) {
 	model->transformedBox.max = Vector3Add(model->box.max, model->position);
 }
 
+u8
+h_EngineLoadGame(const char *file) {
+
+	FILE *fp = NULL;
+
+	if(access(file, F_OK) == 0) {
+
+		fp = fopen(file, "r");
+		if(fp == NULL) {
+			printf("Failed to open file.");
+			return 1;
+		}
+
+		else {
+			char tmp[U8];
+			while(fscanf(fp, "%60s", tmp) == 1) {
+				if(strcmp(tmp, "LEVEL") == 0) {
+					fscanf(fp, "%60s", tmp);
+					if(atoi(tmp) == 0) {
+						printf("Loading saved file failed.\n");
+						return 1;
+					}
+
+					else {
+						//engine.current_level = &engine.levels[atoi(tmp)];
+					}
+				}
+
+				else {
+					printf("Syntax error while reading save file.");
+					return 1;
+				}
+			}
+		}
+	}
+
+	else {
+		printf("Cannot not open file '%s'\n", file);
+		return 1;
+	}
+
+	fclose(fp);
+	return 0;
+}
+
+u8
+h_EngineSaveGame(const char *file) {
+	printf("%s\n", file);
+	return 0;
+}
+
 void
 h_Processor(int count, ...) {
 
@@ -1102,7 +1136,7 @@ h_Processor(int count, ...) {
 
 	switch(va_arg(args, int)) {
 		case PRINT:
-			LOG("%s\n", va_arg(args, const char *));
+			printf("%s\n", va_arg(args, const char *));
 		break;
 	}
 
@@ -1112,19 +1146,6 @@ h_Processor(int count, ...) {
 u8
 h_EngineUnload(void) {
 	return 0;
-}
-
-u8
-h_KeywordExists(const char *keyword) {
-
-	// returns index of keyword if exists
-	for(int i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {
-		if(strcmp(keyword, Processor_Keywords[i][0]) == 0) {
-			return i;
-		}
-	}
-
-	return -1;
 }
 
 void
@@ -1156,6 +1177,19 @@ h_EngineGetline(FILE *fp, char *dst, size_t size) {
 		i++;
 	}
 
+}
+
+u8
+h_KeywordExists(const char *keyword) {
+
+	// returns index of keyword if exists
+	for(int i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {
+		if(strcmp(keyword, Processor_Keywords[i][0]) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 #endif // HAMMER_ENGINE_IMPLEMENTATION end

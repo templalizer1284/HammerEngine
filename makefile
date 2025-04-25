@@ -7,7 +7,7 @@ DFLAGS = -O0 -g -fsanitize=address,undefined
 RFLAGS = -O2
 
 STATIC_CHECK = cppcheck
-STATIC_CHECK_FLAGS = --language=c --std=c99 --check-level=exhaustive --enable=all
+STATIC_CHECK_FLAGS = --language=c --std=c99 --check-level=exhaustive --enable=all --suppress=missingIncludeSystem .
 
 HAMMER_SRC = hammer.h
 SRC = impl.c

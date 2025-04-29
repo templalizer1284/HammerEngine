@@ -384,6 +384,9 @@ h_HammerLevelRun(const char *level) {
 		return 1;
 	}
 
+	Shader psx_shader = LoadShader(0, "wotan/media/pixelizer.fs"); //xx
+	engine.current_level->hero.model.materials[0].shader = psx_shader;
+
 	while(!WindowShouldClose()) {
 
 		BeginDrawing();
@@ -392,6 +395,8 @@ h_HammerLevelRun(const char *level) {
 				if(IsKeyPressed(controls.toggle_pause)) {
 					engine.pause = false;
 				}
+
+				ClearBackground(BLACK);
 
 				goto PAUSE;
 			}
@@ -897,7 +902,7 @@ h_EngineParseLevel(const char *path) {
 				// checking if keyword exists
 				int kword = h_KeywordExists(tmp);
 
-				if(kword < 0) {
+				if(kword) {
 					printf("Syntax error, keyword %s doesn't exist.\n", tmp);
 					return 1;
 				}
@@ -1189,7 +1194,7 @@ h_KeywordExists(const char *keyword) {
 		}
 	}
 
-	return -1;
+	return 1;
 }
 
 #endif // HAMMER_ENGINE_IMPLEMENTATION end

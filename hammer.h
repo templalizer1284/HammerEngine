@@ -55,10 +55,6 @@
 #define SEP "\\"
 #endif
 
-// i will not write this crap everytime
-typedef uint8_t u8;
-typedef uint16_t u16;
-
 #define U8 255
 #define U6 63
 #define U2 4
@@ -69,52 +65,55 @@ typedef uint16_t u16;
 #define HE_DECL static inline
 
 // ddecl
-typedef struct h_Window h_Window;
-typedef struct h_Model h_Model;
-typedef struct h_Entity h_Entity;
-typedef struct h_Level h_Level;
-typedef struct h_Config h_Config;
-typedef struct h_HammerMenu h_HammerMenu;
-typedef struct h_EngineControl h_EngineControl;
 
-typedef struct h_EngineState h_EngineState;
+// i will not write this crap everytime
+typedef uint8_t u8;
+typedef uint16_t u16;
+
+typedef struct hed_window hed_window;
+typedef struct hed_model hed_model;
+typedef struct hed_level hed_level;
+typedef struct hed_config hed_config;
+typedef struct hed_menu hed_menu;
+typedef struct hed_controls hed_controls;
+typedef struct hed_state hed_state;
 
 // fdecl
-HE_DECL u8 		h_HammerRun(void);
-HE_DECL u8 		h_WindowInit(void);
+HE_DECL u8 		he_engine_run(void);
+HE_DECL u8 		he_engine_init_window(void);
+        
+HE_DECL u8 		he_engine_run_level(const char *);
 
-HE_DECL u8 		h_HammerLevelRun(const char *);
+HE_DECL u8 		he_engine_parse_base(void);
+HE_DECL u8 		he_engine_parse_root(void);
+HE_DECL u8 		he_engine_parse_level(const char *);
 
-HE_DECL u8 		h_EngineParseBase(void);
-HE_DECL u8 		h_EngineParseRoot(void);
-HE_DECL u8 		h_EngineParseLevel(const char *);
+HE_DECL hed_model 	he_engine_load_model(const char *);
+HE_DECL	u8 		he_engine_draw_model(hed_model *);
+HE_DECL u8		he_engine_check_model(const char *);
+HE_DECL u8		he_engine_switch_animation(hed_model *, int);
 
-HE_DECL h_Model 	h_EngineModelLoad(const char *);
-HE_DECL	u8 		h_EngineModelDraw(h_Model *);
-HE_DECL u8		h_EngineModelExists(const char *);
-HE_DECL u8		h_EngineModelChangeAnimation(h_Model *, int);
+HE_DECL BoundingBox	he_engine_combine_bbox(BoundingBox, BoundingBox);
+HE_DECL void		he_engine_update_tbbox(hed_model *);
 
-HE_DECL BoundingBox	h_CombineBoundingBoxes(BoundingBox, BoundingBox);
-HE_DECL void		h_UpdateTransformedBoundingBox(h_Model *);
-
-HE_DECL	u8 		h_EngineLoadGame(const char *); // TODO
-HE_DECL u8 		h_EngineSaveGame(const char *); // TODO
-
-HE_DECL void		h_Processor(int, ...);
-HE_DECL u8		h_EngineUnload(void);
+HE_DECL	u8 		he_engine_load_game(const char *); // TODO
+HE_DECL u8 		he_engine_save_game(const char *); // TODO
+//xx
+HE_DECL void		he_processor(int, ...);
+HE_DECL u8		he_engine_die(void);
 
 // non-posix, stack-only, memory-safe getline, not the fastest but its OK
-HE_DECL void		h_EngineGetline(FILE *, char *, size_t);
-HE_DECL u8		h_KeywordExists(const char *);
+HE_DECL void		he_engine_getline(FILE *, char *, size_t);
+HE_DECL u8		he_engine_exists_keyword(const char *);
 
 // ddef
-struct h_Window {
+struct hed_window {
 	u16 width;
 	u16 height;
 	char *title;
 };
 
-struct h_Model {
+struct hed_model {
 	Model model;
 
 	ModelAnimation *animations;
@@ -137,7 +136,7 @@ struct h_Model {
 	Color tint;
 };
 
-struct h_Config {
+struct hed_config {
 	char base[U6];
 	char root[U6];
 	char level[U6];
@@ -145,7 +144,7 @@ struct h_Config {
 	char save[U6];
 };
 
-struct h_HammerMenu {
+struct hed_menu {
 	Font button_font, text_font;
 	char button_newgame[U6];
 	char button_loadgame[U6];
@@ -156,9 +155,9 @@ struct h_HammerMenu {
 	u8 menu_switch;
 };
 
-struct h_Level {
-	h_Model hero,map;
-	h_Model entities[MAX_MODELS];
+struct hed_level {
+	hed_model hero,map;
+	hed_model entities[MAX_MODELS];
 	u16 entities_count;
 	char name[U8];
 
@@ -178,27 +177,7 @@ struct h_Level {
 	char col_action_arg5[U8][U8];
 };
 
-struct h_EngineState {
-	h_Window window;
-	Camera camera;
-	const u8 fps;
-	
-	h_Config config;
-	h_HammerMenu menu;
-	
-	char starting_level[U8];
-	h_Level *current_level;
-	
-	char *load_file;
-
-	bool debug;
-	bool light;
-	bool pause;
-
-	void *cvars[];
-};
-
-struct h_EngineControl {
+struct hed_controls {
 
 	// hero controls
 	int forward;
@@ -217,6 +196,26 @@ struct h_EngineControl {
 	float run_factor;
 };
 
+struct hed_state {
+	hed_window window;
+	Camera camera;
+	const u8 fps;
+	
+	hed_config config;
+	hed_menu menu;
+	
+	char starting_level[U8];
+	hed_level *current_level;
+	
+	char *load_file;
+
+	bool debug;
+	bool light;
+	bool pause;
+
+	hed_controls controls;
+};
+
 enum MODEL_TYPE {
 	HERO,
 	MAP,
@@ -228,10 +227,11 @@ enum PROCESSOR_INSTRUCTIONS {
 	NUM_PROCESSOR_KEYWORDS
 };
 
-// for use within this engine every model must have index of its animations like this
-// starting from 0 for IDLE animation
-// they are in this order because not all entites attack or die, what is common for all
-// entities is that they all have idle and run animations, optionally turning animations.
+/* for use within this engine every model must have index of its animations like this
+ * starting from 0 for IDLE animation
+ * they are in this order because not all entites attack or die, what is common for all
+ * entities is that they all have idle and run animations, optionally turning animations.
+ */
 enum ANIMATION_POSITIONS {
 	IDLE, // = 0
 	WALK,
@@ -250,7 +250,7 @@ enum ANIMATION_POSITIONS {
 };
 
 // globals
-static h_EngineState engine = { .window.title = TITLE,
+static hed_state engine = { 	.window.title = TITLE,
 				.fps = FPS,
 				.starting_level = "",
 				.current_level = NULL,
@@ -258,22 +258,23 @@ static h_EngineState engine = { .window.title = TITLE,
 				.debug = false,
 				.load_file = "",
 				.light = false,
-				.pause = false, };
-
-static h_EngineControl controls = { .forward = KEY_W,
-				    .backward = KEY_S,
-				    .strafe_left = KEY_A,
-				    .strafe_right = KEY_D,
-				    .turn_left = KEY_LEFT,
-				    .turn_right = KEY_RIGHT,
-				    .action = KEY_SPACE,
+				.pause = false,
+				
+				.controls = { 	.forward = KEY_W,
+				    		.backward = KEY_S,
+				    		.strafe_left = KEY_A,
+				    		.strafe_right = KEY_D,
+				    		.turn_left = KEY_LEFT,
+				    		.turn_right = KEY_RIGHT,
+				    		.action = KEY_SPACE,
 				    
-				    .toggle_run = KEY_LEFT_SHIFT,
-				    .toggle_pause = KEY_P,
-				    .toggle_light = KEY_L,
+				    		.toggle_run = KEY_LEFT_SHIFT,
+				    		.toggle_pause = KEY_P,
+				    		.toggle_light = KEY_L,
 
-				    .velocity = 0.05f,
-				    .run_factor = 0.065f, };
+				    		.velocity = 0.05f,
+				    		.run_factor = 0.065f, },
+				};
 
 static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
 	{ "PRINT" }
@@ -281,26 +282,26 @@ static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
 
 // fdef
 u8
-h_HammerRun(void) {
+he_engine_run(void) {
 
 	printf("Hammer Engine Running, BattleCruiser operational.\n");
 
-	if(h_WindowInit()) {
+	if(he_engine_init_window()) {
 		printf("Window Initialization failed. Aborting.");
 		return 1;
 	}
 
-	if(h_EngineParseBase()) {
+	if(he_engine_parse_base()) {
 		printf("Engine Base folder parsing failed. Aborting.");
 		return 1;
 	}
 
-	if(h_EngineParseRoot()) {
+	if(he_engine_parse_root()) {
 		printf("Error occured while parsing root cfg.\n");
 		return 1;
 	}
 
-	if(h_HammerLevelRun(engine.starting_level)) {
+	if(he_engine_run_level(engine.starting_level)) {
 		printf("Level running error.\n");
 		return 1;
 	}
@@ -309,7 +310,7 @@ h_HammerRun(void) {
 }
 
 u8
-h_WindowInit(void) {
+he_engine_init_window(void) {
 
 	if(access(HAMMERCFG, F_OK) == 0) {
 		FILE *fp = fopen(HAMMERCFG, "r");
@@ -377,22 +378,19 @@ h_WindowInit(void) {
 }
 
 u8
-h_HammerLevelRun(const char *level) {
+he_engine_run_level(const char *level) {
 
-	if(h_EngineParseLevel(level)) {
+	if(he_engine_parse_level(level)) {
 		printf("Level parsing error.\n");
 		return 1;
 	}
-
-	Shader psx_shader = LoadShader(0, "wotan/media/pixelizer.fs"); //xx
-	engine.current_level->hero.model.materials[0].shader = psx_shader;
 
 	while(!WindowShouldClose()) {
 
 		BeginDrawing();
 
 			if(engine.pause) {
-				if(IsKeyPressed(controls.toggle_pause)) {
+				if(IsKeyPressed(engine.controls.toggle_pause)) {
 					engine.pause = false;
 				}
 
@@ -409,62 +407,62 @@ h_HammerLevelRun(const char *level) {
 			}
 
 			// drawing models, hero, map and entities.
-			h_EngineModelDraw(&engine.current_level->hero);
-			h_EngineModelDraw(&engine.current_level->map);
+			he_engine_draw_model(&engine.current_level->hero);
+			he_engine_draw_model(&engine.current_level->map);
 
 			// entities, TODO, compare entity types render accordingly
 			for(int i = 0; i < engine.current_level->entities_count; i++) {
-				h_EngineModelDraw(&engine.current_level->entities[i]);
+				he_engine_draw_model(&engine.current_level->entities[i]);
 			}
 
 			// input check
 			// if there is no input set HERO animation to IDLE
-			h_EngineModelChangeAnimation(
+			he_engine_switch_animation(
 				&engine.current_level->hero, IDLE);
 
 			float speed;
 
-			if(IsKeyDown(controls.toggle_run)) {
-				speed = controls.velocity + controls.run_factor;
+			if(IsKeyDown(engine.controls.toggle_run)) {
+				speed = engine.controls.velocity + engine.controls.run_factor;
 			}
 
 			else {
-				speed = controls.velocity;
+				speed = engine.controls.velocity;
 			}
 			
-			if(IsKeyDown(controls.forward)) {
+			if(IsKeyDown(engine.controls.forward)) {
 				engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
 				engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
 
-				h_EngineModelChangeAnimation(
+				he_engine_switch_animation(
 					&engine.current_level->hero, WALK);
 			}
 
-			else if(IsKeyDown(controls.backward)) {
+			else if(IsKeyDown(engine.controls.backward)) {
 				engine.current_level->hero.position.z -= speed * cos(DEG2RAD * engine.current_level->hero.angle);
 				engine.current_level->hero.position.x -= speed * sin(DEG2RAD * engine.current_level->hero.angle);
 
-				h_EngineModelChangeAnimation(
+				he_engine_switch_animation(
 					&engine.current_level->hero, WALK);
 			}
 
-			if(IsKeyDown(controls.turn_left)) {
+			if(IsKeyDown(engine.controls.turn_left)) {
 				engine.current_level->hero.angle += 5.0f;
 			}
 
-			else if(IsKeyDown(controls.turn_right)) {
+			else if(IsKeyDown(engine.controls.turn_right)) {
 				engine.current_level->hero.angle -= 5.0f;
 			}
 
-			if(IsKeyDown(controls.strafe_left)) {
+			if(IsKeyDown(engine.controls.strafe_left)) {
 				engine.current_level->hero.position.x += speed;
 			}
 
-			else if(IsKeyDown(controls.strafe_right)) {
+			else if(IsKeyDown(engine.controls.strafe_right)) {
 				engine.current_level->hero.position.x -= speed;
 			}
 
-			if(IsKeyPressed(controls.toggle_pause)) {
+			if(IsKeyPressed(engine.controls.toggle_pause)) {
 				engine.pause = true;
 			}
 
@@ -473,7 +471,7 @@ h_HammerLevelRun(const char *level) {
 				if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
 					switch(engine.current_level->col_action_instruction[i]) {
 						case PRINT:
-							h_Processor(2, PRINT, engine.current_level->col_action_arg1[i]);
+							he_processor(2, PRINT, engine.current_level->col_action_arg1[i]);
 						break;
 					};
 				}
@@ -496,7 +494,7 @@ h_HammerLevelRun(const char *level) {
 }
 
 u8
-h_EngineParseBase(void) {
+he_engine_parse_base(void) {
 
 	// first count the number of levels
 	struct dirent *entry;
@@ -565,7 +563,7 @@ h_EngineParseBase(void) {
 }
 
 u8
-h_EngineParseRoot(void) {
+he_engine_parse_root(void) {
 
 	FILE *fp = fopen(engine.config.root, "r");
 
@@ -656,7 +654,7 @@ h_EngineParseRoot(void) {
 }
 
 u8
-h_EngineParseLevel(const char *path) {
+he_engine_parse_level(const char *path) {
 
 	char resources[255], logic[255];
 
@@ -669,7 +667,7 @@ h_EngineParseLevel(const char *path) {
 	FILE *fp = NULL; char tmp[U8];
 	#define ff fscanf(fp, "%60s", tmp)
 
-	static h_Level level;
+	static hed_level level;
 
 	(void)snprintf(level.name, sizeof(level.name),
 	"%s", path);
@@ -693,7 +691,7 @@ h_EngineParseLevel(const char *path) {
 					
 					if(access(p, F_OK) == 0) {
 						// load hero
-						level.hero = h_EngineModelLoad(p);
+						level.hero = he_engine_load_model(p);
 						
 						(void)snprintf(level.hero.name, sizeof(level.hero.name),
 						"%s", tmp);
@@ -718,7 +716,7 @@ h_EngineParseLevel(const char *path) {
 					
 					if(access(p, F_OK) == 0) {
 						// load map
-						level.map = h_EngineModelLoad(p);
+						level.map = he_engine_load_model(p);
 
 						(void)snprintf(level.map.name, sizeof(level.map.name),
 						"%s", tmp);
@@ -753,7 +751,7 @@ h_EngineParseLevel(const char *path) {
 							}
 
 							else {
-								engine.current_level->entities[engine.current_level->entities_count] = h_EngineModelLoad(full_path);
+								engine.current_level->entities[engine.current_level->entities_count] = he_engine_load_model(full_path);
 								engine.current_level->entities_count++;
 							}
 						}
@@ -799,7 +797,7 @@ h_EngineParseLevel(const char *path) {
 				ff;
 				
 				// check if model exists in array
-				int counter = h_EngineModelExists(tmp);
+				int counter = he_engine_check_model(tmp);
 
 				if(counter < 0) {
 					printf("Syntax error in level logic, model doesn't exist.\n");
@@ -847,7 +845,7 @@ h_EngineParseLevel(const char *path) {
 				}
 
 				// checking if both models are loaded in program
-				int counter = h_EngineModelExists(first_model);
+				int counter = he_engine_check_model(first_model);
 				
 				if(counter < 0) {
 					printf("Error, model named %s doesn't exists", tmp);
@@ -871,7 +869,7 @@ h_EngineParseLevel(const char *path) {
 					}
 				}
 
-				counter = h_EngineModelExists(second_model);
+				counter = he_engine_check_model(second_model);
 
 				// repeating this crap because i am stupid
 				if(counter < 0) {
@@ -900,7 +898,7 @@ h_EngineParseLevel(const char *path) {
 				ff;
 
 				// checking if keyword exists
-				int kword = h_KeywordExists(tmp);
+				int kword = he_engine_exists_keyword(tmp);
 
 				if(kword) {
 					printf("Syntax error, keyword %s doesn't exist.\n", tmp);
@@ -912,7 +910,7 @@ h_EngineParseLevel(const char *path) {
 
 					switch(kword) {
 						case PRINT:
-							h_EngineGetline(fp, tmp, sizeof(tmp));
+							he_engine_getline(fp, tmp, sizeof(tmp));
 							
 							engine.current_level->col_action_instruction[engine.current_level->col_count] = kword;
 							
@@ -939,10 +937,10 @@ h_EngineParseLevel(const char *path) {
 	return 0;
 }
 
-h_Model
-h_EngineModelLoad(const char *path) {
+hed_model
+he_engine_load_model(const char *path) {
 
-	h_Model model = {
+	hed_model model = {
 		.animCount = 0,
 		.currentFrame = 0,
 		.currentAnimation = IDLE,
@@ -978,14 +976,14 @@ h_EngineModelLoad(const char *path) {
 
 	for(int i = 1; i < model.model.meshCount; i++) {
 		BoundingBox currentBox = GetMeshBoundingBox(model.model.meshes[i]);
-		model.box = h_CombineBoundingBoxes(model.box, currentBox);
+		model.box = he_engine_combine_bbox(model.box, currentBox);
 	}
 
 	return model;
 }
 
 u8
-h_EngineModelDraw(h_Model *model) {
+he_engine_draw_model(hed_model *model) {
 
 	if(model->render) {
 
@@ -1001,7 +999,7 @@ h_EngineModelDraw(h_Model *model) {
 				model->currentFrame);
 		}
 		
-		h_UpdateTransformedBoundingBox(model);
+		he_engine_update_tbbox(model);
 
 		DrawModelEx(model->model, model->position, (Vector3){0.0f, 1.0f, 0.0f},
 		model->angle, model->scale, model->tint);
@@ -1019,7 +1017,7 @@ h_EngineModelDraw(h_Model *model) {
 }
 
 u8
-h_EngineModelExists(const char *name) {
+he_engine_check_model(const char *name) {
 
 	// returns index of model in current level
 	// 0 = hero
@@ -1047,7 +1045,7 @@ h_EngineModelExists(const char *name) {
 }
 
 u8
-h_EngineModelChangeAnimation(h_Model *model, int animation) {
+he_engine_switch_animation(hed_model *model, int animation) {
 
 	if(animation > model->animCount) {
 		printf("Model animation error, animation number greater than number of animations.\n");
@@ -1063,7 +1061,7 @@ h_EngineModelChangeAnimation(h_Model *model, int animation) {
 }
 
 BoundingBox
-h_CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
+he_engine_combine_bbox(BoundingBox box1, BoundingBox box2) {
 	BoundingBox combined;
 
 	combined.min.x = fmin(box1.min.x, box2.min.x);
@@ -1077,13 +1075,13 @@ h_CombineBoundingBoxes(BoundingBox box1, BoundingBox box2) {
 }
 
 void
-h_UpdateTransformedBoundingBox(h_Model *model) {
+he_engine_update_tbbox(hed_model *model) {
 	model->transformedBox.min = Vector3Add(model->box.min, model->position);
 	model->transformedBox.max = Vector3Add(model->box.max, model->position);
 }
 
 u8
-h_EngineLoadGame(const char *file) {
+he_engine_load_game(const char *file) {
 
 	FILE *fp = NULL;
 
@@ -1128,13 +1126,13 @@ h_EngineLoadGame(const char *file) {
 }
 
 u8
-h_EngineSaveGame(const char *file) {
+he_engine_save_game(const char *file) {
 	printf("%s\n", file);
 	return 0;
 }
 
 void
-h_Processor(int count, ...) {
+he_processor(int count, ...) {
 
 	va_list args;
 	va_start(args, count);
@@ -1149,12 +1147,12 @@ h_Processor(int count, ...) {
 }
 
 u8
-h_EngineUnload(void) {
+he_engine_die(void) {
 	return 0;
 }
 
 void
-h_EngineGetline(FILE *fp, char *dst, size_t size) {
+he_engine_getline(FILE *fp, char *dst, size_t size) {
 
 	(void)memset(dst, 0, size);
 	
@@ -1185,7 +1183,7 @@ h_EngineGetline(FILE *fp, char *dst, size_t size) {
 }
 
 u8
-h_KeywordExists(const char *keyword) {
+he_engine_exists_keyword(const char *keyword) {
 
 	// returns index of keyword if exists
 	for(int i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {

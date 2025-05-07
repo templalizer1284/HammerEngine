@@ -42,11 +42,11 @@
 #define MAX_MODELS 255
 #define MAX_LEVELS 32
 
-#define h_Stringify(x) #x
-#define h_Vec3Mod(dst,x,y,z) \
+#define he_stringify(x) #x
+#define he_vec3_modify(dst,x,y,z) \
 	dst.x = x; \
 	dst.y = y; \
-	dst.z = y
+	dst.z = z
 
 #define SEP "/"
 
@@ -57,7 +57,7 @@
 
 #define U8 255
 #define U6 63
-#define U2 4
+#define U2 3
 
 // psx-style
 #define FPS 30
@@ -84,6 +84,10 @@ HE_DECL u8 		he_engine_init_window(void);
         
 HE_DECL u8 		he_engine_run_level(const char *);
 
+HE_DECL void		he_engine_handle_input(void);
+HE_DECL void		he_engine_check_collisions(void);
+HE_DECL void		he_engine_render(void);
+
 HE_DECL u8 		he_engine_parse_base(void);
 HE_DECL u8 		he_engine_parse_root(void);
 HE_DECL u8 		he_engine_parse_level(const char *);
@@ -98,7 +102,7 @@ HE_DECL void		he_engine_update_tbbox(hed_model *);
 
 HE_DECL	u8 		he_engine_load_game(const char *); // TODO
 HE_DECL u8 		he_engine_save_game(const char *); // TODO
-//xx
+
 HE_DECL void		he_processor(int, ...);
 HE_DECL u8		he_engine_die(void);
 
@@ -222,7 +226,7 @@ enum MODEL_TYPE {
 	ENTITY
 };
 
-enum PROCESSOR_INSTRUCTIONS {
+enum PROCESSOR_INSTRUCTION {
 	PRINT, // one arg, const char *
 	NUM_PROCESSOR_KEYWORDS
 };
@@ -232,7 +236,7 @@ enum PROCESSOR_INSTRUCTIONS {
  * they are in this order because not all entites attack or die, what is common for all
  * entities is that they all have idle and run animations, optionally turning animations.
  */
-enum ANIMATION_POSITIONS {
+enum ANIMATION_POSITION {
 	IDLE, // = 0
 	WALK,
 	RUN,
@@ -387,110 +391,126 @@ he_engine_run_level(const char *level) {
 
 	while(!WindowShouldClose()) {
 
-		BeginDrawing();
+		// render everything needed
+		he_engine_render();
 
-			if(engine.pause) {
-				if(IsKeyPressed(engine.controls.toggle_pause)) {
-					engine.pause = false;
-				}
+		// input handling
+		he_engine_handle_input();
 
-				ClearBackground(BLACK);
-
-				goto PAUSE;
-			}
-			
-			ClearBackground(DARKBLUE);
-			BeginMode3D(engine.camera);
-
-			if(engine.debug) {
-				DrawGrid(10.0f, 1.0f);
-			}
-
-			// drawing models, hero, map and entities.
-			he_engine_draw_model(&engine.current_level->hero);
-			he_engine_draw_model(&engine.current_level->map);
-
-			// entities, TODO, compare entity types render accordingly
-			for(int i = 0; i < engine.current_level->entities_count; i++) {
-				he_engine_draw_model(&engine.current_level->entities[i]);
-			}
-
-			// input check
-			// if there is no input set HERO animation to IDLE
-			he_engine_switch_animation(
-				&engine.current_level->hero, IDLE);
-
-			float speed;
-
-			if(IsKeyDown(engine.controls.toggle_run)) {
-				speed = engine.controls.velocity + engine.controls.run_factor;
-			}
-
-			else {
-				speed = engine.controls.velocity;
-			}
-			
-			if(IsKeyDown(engine.controls.forward)) {
-				engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
-				engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
-
-				he_engine_switch_animation(
-					&engine.current_level->hero, WALK);
-			}
-
-			else if(IsKeyDown(engine.controls.backward)) {
-				engine.current_level->hero.position.z -= speed * cos(DEG2RAD * engine.current_level->hero.angle);
-				engine.current_level->hero.position.x -= speed * sin(DEG2RAD * engine.current_level->hero.angle);
-
-				he_engine_switch_animation(
-					&engine.current_level->hero, WALK);
-			}
-
-			if(IsKeyDown(engine.controls.turn_left)) {
-				engine.current_level->hero.angle += 5.0f;
-			}
-
-			else if(IsKeyDown(engine.controls.turn_right)) {
-				engine.current_level->hero.angle -= 5.0f;
-			}
-
-			if(IsKeyDown(engine.controls.strafe_left)) {
-				engine.current_level->hero.position.x += speed;
-			}
-
-			else if(IsKeyDown(engine.controls.strafe_right)) {
-				engine.current_level->hero.position.x -= speed;
-			}
-
-			if(IsKeyPressed(engine.controls.toggle_pause)) {
-				engine.pause = true;
-			}
-
-			// check collisions
-			for(int i = 0; i < engine.current_level->col_count; i++) {
-				if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
-					switch(engine.current_level->col_action_instruction[i]) {
-						case PRINT:
-							he_processor(2, PRINT, engine.current_level->col_action_arg1[i]);
-						break;
-					};
-				}
-			}
-
-			PAUSE:
-			EndMode3D();
-
-			if(engine.debug) {
-				DrawFPS(10.0f,10.0f);
-			}
-			
-		EndDrawing();
+		// check collisions
+		he_engine_check_collisions();
 	}
 
 	UnloadModel(engine.current_level->hero.model);
 	UnloadModel(engine.current_level->map.model);
 
 	return 0;
+}
+
+void
+he_engine_handle_input(void) {
+	// if there is no input set HERO animation to IDLE
+	he_engine_switch_animation(
+		&engine.current_level->hero, IDLE);
+
+	float speed;
+
+	if(IsKeyDown(engine.controls.toggle_run)) {
+		speed = engine.controls.velocity + engine.controls.run_factor;
+	}
+
+	else {
+		speed = engine.controls.velocity;
+	}
+			
+	if(IsKeyDown(engine.controls.forward)) {
+		engine.current_level->hero.position.z += speed * cos(DEG2RAD * engine.current_level->hero.angle);
+		engine.current_level->hero.position.x += speed * sin(DEG2RAD * engine.current_level->hero.angle);
+
+		he_engine_switch_animation(
+			&engine.current_level->hero, WALK);
+	}
+
+	else if(IsKeyDown(engine.controls.backward)) {
+		engine.current_level->hero.position.z -= speed * cos(DEG2RAD * engine.current_level->hero.angle);
+		engine.current_level->hero.position.x -= speed * sin(DEG2RAD * engine.current_level->hero.angle);
+
+		he_engine_switch_animation(
+		&engine.current_level->hero, WALK);
+	}
+
+	if(IsKeyDown(engine.controls.turn_left)) {
+		engine.current_level->hero.angle += 5.0f;
+	}
+
+	else if(IsKeyDown(engine.controls.turn_right)) {
+		engine.current_level->hero.angle -= 5.0f;
+	}
+
+	if(IsKeyDown(engine.controls.strafe_left)) {
+		engine.current_level->hero.position.x += speed;
+	}
+
+	else if(IsKeyDown(engine.controls.strafe_right)) {
+		engine.current_level->hero.position.x -= speed;
+	}
+
+	if(IsKeyPressed(engine.controls.toggle_pause)) {
+		engine.pause = true;
+	}
+}
+
+void
+he_engine_check_collisions(void) {
+	for(size_t i = 0; i < engine.current_level->col_count; i++) {
+		if(CheckCollisionBoxes(*engine.current_level->col_one[i], *engine.current_level->col_two[i])) {
+			switch(engine.current_level->col_action_instruction[i]) {
+				case PRINT:
+					he_processor(2, PRINT, engine.current_level->col_action_arg1[i]);
+				break;
+			};
+		}
+	}
+}
+
+void
+he_engine_render(void) {
+	BeginDrawing();
+
+		if(engine.pause) {
+			if(IsKeyPressed(engine.controls.toggle_pause)) {
+				engine.pause = false;
+			}
+
+			ClearBackground(BLACK);
+
+			goto PAUSE;
+		}
+			
+		ClearBackground(DARKBLUE);
+		BeginMode3D(engine.camera);
+
+		if(engine.debug) {
+			DrawGrid(10.0f, 1.0f);
+		}
+
+		// drawing models, hero, map and entities.
+		he_engine_draw_model(&engine.current_level->hero);
+		he_engine_draw_model(&engine.current_level->map);
+
+		// entities, TODO, compare entity types render accordingly
+		for(size_t i = 0; i < engine.current_level->entities_count; i++) {
+			he_engine_draw_model(&engine.current_level->entities[i]);
+		}
+
+		PAUSE:
+		EndMode3D();
+
+		if(engine.debug) {
+			DrawFPS(10.0f,10.0f);
+		}
+			
+	EndDrawing();
 }
 
 u8
@@ -506,7 +526,7 @@ he_engine_parse_base(void) {
 	if(access(engine.config.base, F_OK) == 0) {
 
 		// check i posix's opendir can access base levels folder
-		char levels_folder[256] = { 0 };
+		char levels_folder[U8] = { 0 };
 		(void)snprintf(levels_folder, sizeof(levels_folder),
 			"%s%s%s", engine.config.base, SEP, BASE_LEVELS);
 		
@@ -523,7 +543,7 @@ he_engine_parse_base(void) {
 				// skip . and ..
 				if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
 
-				char full_path[256];
+				char full_path[U8];
 				snprintf(full_path, sizeof(full_path),
 				"%s%s%s%s%s", engine.config.base, SEP, BASE_LEVELS, SEP, entry->d_name);
 
@@ -597,7 +617,7 @@ he_engine_parse_root(void) {
 
 		if(strcmp(tmp, "FONT") == 0) {
 			ff;
-			char path[255];
+			char path[U8];
 			(void)snprintf(path, sizeof(path),
 			"%s%s%s%s%s", engine.config.base, SEP, BASE_MEDIA, SEP, tmp);
 			
@@ -626,7 +646,7 @@ he_engine_parse_root(void) {
 		if(strcmp(tmp, "NEW_GAME_START") == 0) {
 			ff;
 
-			char path[255];
+			char path[U8];
 			(void)snprintf(path, sizeof(path),
 			"%s%s%s", engine.config.level, SEP, tmp);
 			
@@ -656,7 +676,7 @@ he_engine_parse_root(void) {
 u8
 he_engine_parse_level(const char *path) {
 
-	char resources[255], logic[255];
+	char resources[U8], logic[U8];
 
 	(void)snprintf(resources, sizeof(resources),
 	"%s%s%s", path, SEP, CFG_RESOURCES);
@@ -664,7 +684,8 @@ he_engine_parse_level(const char *path) {
 	(void)snprintf(logic, sizeof(logic),
 	"%s%s%s", path, SEP, CFG_printfIC);
 
-	FILE *fp = NULL; char tmp[U8];
+	FILE *fp = NULL;
+	char tmp[U6];
 	#define ff fscanf(fp, "%60s", tmp)
 
 	static hed_level level;
@@ -809,15 +830,15 @@ he_engine_parse_level(const char *path) {
 					fscanf(fp, "%f %f %f", &x, &y, &z);
 
 					if(counter == HERO) {
-						h_Vec3Mod(engine.current_level->hero.position, x,y,z);
+						he_vec3_modify(engine.current_level->hero.position, x,y,z);
 					}
 
 					else if(counter == MAP) {
-						h_Vec3Mod(engine.current_level->map.position, x,y,z);
+						he_vec3_modify(engine.current_level->map.position, x,y,z);
 					}
 
 					else {
-						h_Vec3Mod(engine.current_level->entities[counter-ENTITY].position,
+						he_vec3_modify(engine.current_level->entities[counter-ENTITY].position,
 						x,y,z);
 					}
 				}
@@ -974,7 +995,7 @@ he_engine_load_model(const char *path) {
 	// generating bounding box
 	model.box = GetMeshBoundingBox(model.model.meshes[0]);
 
-	for(int i = 1; i < model.model.meshCount; i++) {
+	for(size_t i = 1; (int)i < model.model.meshCount; i++) {
 		BoundingBox currentBox = GetMeshBoundingBox(model.model.meshes[i]);
 		model.box = he_engine_combine_bbox(model.box, currentBox);
 	}
@@ -1034,7 +1055,7 @@ he_engine_check_model(const char *name) {
 	}
 
 	else {
-		for(int i = 0; i < engine.current_level->entities_count; i++) {
+		for(size_t i = 0; i < engine.current_level->entities_count; i++) {
 			if(strcmp(name, engine.current_level->entities[i].name) == 0) {
 				return i + ENTITY;
 			}
@@ -1186,7 +1207,7 @@ u8
 he_engine_exists_keyword(const char *keyword) {
 
 	// returns index of keyword if exists
-	for(int i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {
+	for(size_t i = 0; i < NUM_PROCESSOR_KEYWORDS; i++) {
 		if(strcmp(keyword, Processor_Keywords[i][0]) == 0) {
 			return i;
 		}

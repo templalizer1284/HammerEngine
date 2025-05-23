@@ -94,7 +94,7 @@ HE_DECL u8 		he_engine_parse_level(const char *);
 
 HE_DECL hed_model 	he_engine_load_model(const char *);
 HE_DECL	u8 		he_engine_draw_model(hed_model *);
-HE_DECL u8		he_engine_check_model(const char *);
+HE_DECL int		he_engine_check_model(const char *); 
 HE_DECL u8		he_engine_switch_animation(hed_model *, int);
 
 HE_DECL BoundingBox	he_engine_combine_bbox(BoundingBox, BoundingBox);
@@ -104,7 +104,8 @@ HE_DECL	u8 		he_engine_load_game(const char *); // TODO
 HE_DECL u8 		he_engine_save_game(const char *); // TODO
 
 HE_DECL void		he_processor(int, ...);
-HE_DECL u8		he_engine_die(void);
+HE_DECL void		he_engine_die(void);
+HE_DECL void		he_engine_cleanup_level(void);
 
 // non-posix, stack-only, memory-safe getline, not the fastest but its OK
 HE_DECL void		he_engine_getline(FILE *, char *, size_t);
@@ -288,7 +289,7 @@ static char *Processor_Keywords[NUM_PROCESSOR_KEYWORDS][U8] = {
 u8
 he_engine_run(void) {
 
-	printf("Hammer Engine Running, BattleCruiser operational.\n");
+	printf("Hammer Engine Running, Battlecruiser operational.\n");
 
 	if(he_engine_init_window()) {
 		printf("Window Initialization failed. Aborting.");
@@ -401,8 +402,7 @@ he_engine_run_level(const char *level) {
 		he_engine_check_collisions();
 	}
 
-	UnloadModel(engine.current_level->hero.model);
-	UnloadModel(engine.current_level->map.model);
+	he_engine_cleanup_level();
 
 	return 0;
 }
@@ -1037,7 +1037,7 @@ he_engine_draw_model(hed_model *model) {
 	return 0;
 }
 
-u8
+int
 he_engine_check_model(const char *name) {
 
 	// returns index of model in current level
@@ -1167,9 +1167,24 @@ he_processor(int count, ...) {
 	va_end(args);
 }
 
-u8
+void
 he_engine_die(void) {
-	return 0;
+	return;
+}
+
+void
+he_engine_cleanup_level(void) {
+
+	UnloadModel(engine.current_level->hero.model);
+	UnloadModel(engine.current_level->map.model);
+
+	for(int i = 0; i < engine.current_level->entities_count; i++) {
+		UnloadModel(engine.current_level->entities[i].model);
+	}
+
+	engine.current_level = NULL;
+
+	return;
 }
 
 void
@@ -1201,6 +1216,7 @@ he_engine_getline(FILE *fp, char *dst, size_t size) {
 		i++;
 	}
 
+	return;
 }
 
 u8
